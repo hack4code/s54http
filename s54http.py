@@ -4,16 +4,18 @@ import logging
 import getopt
 import sys
 import os
-import time
+import stat
+import fcntl
 
 config = {'port': 8080,
-          'daemon': False}
+          'daemon': False,
+          'pid-file': 's54http.pid'}
 
 
 class remote_protocol(protocol.Protocol):
     def connectionMade(self):
         self.socks5 = self.factory.socks5
-        # -- send success to client
+        # send success to client
         self.socks5.send_connect_response(0)
         self.socks5.remote = self.transport
         self.socks5.state = 'communicate'
@@ -35,6 +37,8 @@ class remote_factory(protocol.ClientFactory):
         self.socks5.transport.loseConnection()
 
     def clientConnectionLost(self, connector, reason):
+        logging.info('connetion to %s closed: %s',
+                     self.remote_host, reason.getErrorMessage())
         self.socks5.transport.loseConnection()
 
 
@@ -51,23 +55,23 @@ class socks5_protocol(protocol.Protocol):
         logging.info('version = %d, nmethods = %d' %
                      (ver, nmethods))
         if ver != 5:
-            logging.error("version %d not supported", ver)
+            logging.error('socks %d not supported', ver)
             self.transport.loseConnection()
             return
         if nmethods < 1:
-            logging.error("nmethods = %d", nmethods)
+            logging.error('no method')
             self.transport.loseConnection()
             return
         methods = data[2:2+nmethods]
-        for meth in methods:
-            logging.info('method = %x', meth)
-            if meth == 0:
+        for method in methods:
+            logging.info('method = %x', method)
+            if method == 0:
                 # no auth, neato, accept
                 resp = struct.pack('!BB', 5, 0)
                 self.transport.write(resp)
                 self.state = 'wait_connect'
                 return
-            if meth == 255:
+            if method == 255:
                 self.transport.loseConnection()
                 return
         self.transport.loseConnection()
@@ -79,7 +83,7 @@ class socks5_protocol(protocol.Protocol):
             return
         data = data[4:]
         if cmd == 1:
-            logging.info('CONNECT')
+            logging.info('connect')
             host = None
             if atyp == 1:  # IP V4
                 logging.info('ipv4')
@@ -93,26 +97,25 @@ class socks5_protocol(protocol.Protocol):
                 data = data[1+l:]
             elif atyp == 4:  # IP V6
                 logging.error('ipv6 not supported')
+                self.transport.loseConnection()
+                return
             else:
                 self.transport.loseConnection()
                 return
-            port = struct.unpack('!H', data[:2])
+            port = struct.unpack('!H', data[:2])[0]
             data = data[2:]
             logging.info('connecting %s:%d', host, port)
             return self.perform_connect(host, port)
         elif cmd == 2:
-            logging.info('BIND')
+            logging.error('bind not supported')
         elif cmd == 3:
-            logging.info('UDP ASSOCIATE')
-        # we should have processed the request by now
+            logging.info('udp not supported')
         self.transport.loseConnection()
 
     def send_connect_response(self, code):
         try:
             myname = self.transport.getHost().host
         except:
-            # this might fail as no longer a socket
-            # is present
             self.transport.loseConnection()
             return
         ip = [int(i) for i in myname.split('.')]
@@ -132,9 +135,37 @@ class socks5_protocol(protocol.Protocol):
 def daemon():
     pid = os.fork()
     if pid > 0:
-        time.sleep(5)
         sys.exit(0)
     sys.stdin.close()
+
+
+def write_pid_file():
+    pid = os.getpid()
+    try:
+        fd = os.open(config['pid-file'], os.O_RDWR | os.O_CREAT,
+                     stat.S_IRUSR | stat.S_IWUSR)
+    except:
+        logging.error('open pid-file %s failed', config['pid-file'])
+        sys.exit(-1)
+    flags = fcntl.fcntl(fd, fcntl.F_GETFD)
+    flags |= fcntl.FD_CLOEXEC
+    r = fcntl.fcntl(fd, fcntl.F_SETFD, flags)
+    try:
+        fcntl.lockf(fd, fcntl.LOCK_EX | fcntl.LOCK_NB, 0, 0, os.SEEK_SET)
+    except IOError:
+        r = os.read(fd, 32)
+        logging.error('already started at pid %d', r)
+        os.close(fd)
+        sys.exit(-1)
+    os.ftruncate(fd, 0)
+    os.write(fd, str(pid).encode('utf8'))
+
+
+def run_server():
+    factory = protocol.ServerFactory()
+    factory.protocol = socks5_protocol
+    reactor.listenTCP(config['port'], factory)
+    reactor.run()
 
 
 def main():
@@ -146,13 +177,13 @@ def main():
             config['port'] = int(v)
         if k == '-d':
             config['daemon'] = True
+        if k == 'pid-file=':
+            config['pid-file'] = v
+    logging.basicConfig(level=logging.DEBUG)
     if config['daemon']:
         daemon()
-    logging.basicConfig(level=logging.DEBUG)
-    factory = protocol.ServerFactory()
-    factory.protocol = socks5_protocol
-    reactor.listenTCP(config['port'], factory)
-    reactor.run()
+    write_pid_file()
+    run_server()
 
 if __name__ == '__main__':
     main()
