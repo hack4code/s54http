@@ -1,6 +1,13 @@
 from twisted.internet import reactor, protocol
 import struct
 import logging
+import getopt
+import sys
+import os
+import time
+
+config = {'port': 8080,
+          'daemon': False}
 
 
 class remote_protocol(protocol.Protocol):
@@ -127,10 +134,28 @@ class socks5_protocol(protocol.Protocol):
         self.remote.write(data)
 
 
+def daemon():
+    pid = os.fork()
+    if pid > 0:
+        time.sleep(5)
+        sys.exit(0)
+    sys.stdin.close()
+
+
 def main():
+    shortopts = 'dp:'
+    longopts = 'pid-file='
+    optlist, args = getopt.getopt(sys.argv[1:], shortopts, longopts)
+    for k, v in optlist:
+        if k == '-p':
+            config['port'] = int(v)
+        if k == '-d':
+            config['daemon'] = True
+    if config['daemon']:
+        daemon()
     factory = protocol.ServerFactory()
     factory.protocol = socks5_protocol
-    reactor.listenTCP(8123, factory)
+    reactor.listenTCP(config['port'], factory)
     reactor.run()
 
 if __name__ == '__main__':
