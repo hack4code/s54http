@@ -12,7 +12,6 @@ config = {'port': 8080,
 
 class remote_protocol(protocol.Protocol):
     def connectionMade(self):
-        logging.info('Connection made')
         self.socks5 = self.factory.socks5
         # -- send success to client
         self.socks5.send_connect_response(0)
@@ -24,17 +23,18 @@ class remote_protocol(protocol.Protocol):
 
 
 class remote_factory(protocol.ClientFactory):
-    def __init__(self, socks5):
+    def __init__(self, socks5, host=''):
         self.protocol = remote_protocol
         self.socks5 = socks5
+        self.remote_host = host
 
     def clientConnectionFailed(self, connector, reason):
-        logging.error('failed: %s', reason.getErrorMessage())
+        logging.error('connect to %s failed: %s',
+                      self.remote_host, reason.getErrorMessage())
         self.socks5.send_connect_response(5)
         self.socks5.transport.loseConnection()
 
     def clientConnectionLost(self, connector, reason):
-        logging.info('connection lost: %s', reason.getErrorMessage())
         self.socks5.transport.loseConnection()
 
 
@@ -48,14 +48,14 @@ class socks5_protocol(protocol.Protocol):
 
     def wait_hello(self, data):
         (ver, nmethods) = struct.unpack('!BB', data[:2])
-        logging.info('Got version = %x, nmethods = %x' % (ver, nmethods))
+        logging.info('version = %d, nmethods = %d' %
+                     (ver, nmethods))
         if ver != 5:
-            logging.error("socks%d not supported", ver)
+            logging.error("version %d not supported", ver)
             self.transport.loseConnection()
             return
         if nmethods < 1:
-            # not SOCKS5 protocol?!
-            logging.error("socks5 nmethods = %d", nmethods)
+            logging.error("nmethods = %d", nmethods)
             self.transport.loseConnection()
             return
         methods = data[2:2+nmethods]
@@ -68,16 +68,13 @@ class socks5_protocol(protocol.Protocol):
                 self.state = 'wait_connect'
                 return
             if meth == 255:
-                # disconnect
                 self.transport.loseConnection()
                 return
-        # we should have processed the request by now
         self.transport.loseConnection()
 
     def wait_connect(self, data):
         (ver, cmd, rsv, atyp) = struct.unpack('!BBBB', data[:4])
         if ver != 5 or rsv != 0:
-            # protocol violation
             self.transport.loseConnection()
             return
         data = data[4:]
@@ -89,21 +86,19 @@ class socks5_protocol(protocol.Protocol):
                 (b1, b2, b3, b4) = struct.unpack('!BBBB', data[:4])
                 host = '%i.%i.%i.%i' % (b1, b2, b3, b4)
                 data = data[4:]
-            elif atyp == 3:  # domainname
-                logging.info('domain')
+            elif atyp == 3:
+                logging.info('name')
                 l = struct.unpack('!B', data[:1])[0]
                 host = data[1:1+l].decode('utf-8')
                 data = data[1+l:]
             elif atyp == 4:  # IP V6
-                logging.info('ipv6')
+                logging.error('ipv6 not supported')
             else:
-                # protocol violation
                 self.transport.loseConnection()
                 return
-            (port) = struct.unpack('!H', data[:2])
-            port = port[0]
+            port = struct.unpack('!H', data[:2])
             data = data[2:]
-            logging.info('* connecting %s:%d', host, port)
+            logging.info('connecting %s:%d', host, port)
             return self.perform_connect(host, port)
         elif cmd == 2:
             logging.info('BIND')
@@ -127,7 +122,7 @@ class socks5_protocol(protocol.Protocol):
         self.transport.write(resp)
 
     def perform_connect(self, host, port):
-        factory = remote_factory(self)
+        factory = remote_factory(self, host=host)
         reactor.connectTCP(host, port, factory)
 
     def communicate(self, data):
@@ -153,6 +148,7 @@ def main():
             config['daemon'] = True
     if config['daemon']:
         daemon()
+    logging.basicConfig(level=logging.DEBUG)
     factory = protocol.ServerFactory()
     factory.protocol = socks5_protocol
     reactor.listenTCP(config['port'], factory)
