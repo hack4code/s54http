@@ -12,7 +12,7 @@ config = {'server': '127.0.0.1',
           'log-level': logging.DEBUG}
 
 
-class sock_remote(protocol.Protocol):
+class sock_remote_protocol(protocol.Protocol):
     def connectionMade(self):
         self.local_sock = self.factory.local_sock
         self.local_sock.remote = self.transport
@@ -22,9 +22,9 @@ class sock_remote(protocol.Protocol):
         self.local_sock.transport.write(data)
 
 
-class remote_factory(protocol.ClientFactory):
+class sock_remote_factory(protocol.ClientFactory):
     def __init__(self, sock):
-        self.protocol = sock_remote
+        self.protocol = sock_remote_protocol
         self.local_sock = sock
 
     def clientConnectionFailed(self, connector, reason):
@@ -38,20 +38,23 @@ class remote_factory(protocol.ClientFactory):
         self.local_sock.transport.loseConnection()
 
 
-class sock_local(protocol.Protocol):
+class sock_local_protocol(protocol.Protocol):
     def __init__(self):
         self.state = 'wait_remote'
         self.buf = []
+        self.connect_remote()
 
     def connectionMade(self):
-        factory = remote_factory(self)
-        reactor.connectSSL(config['server'], config['sport'], factory,
-                           ssl.ClientContextFactory())
         pass
 
     def dataReceived(self, data):
         method = getattr(self, self.state)
         method(data)
+
+    def connect_remote(self):
+        factory = sock_remote_factory(self)
+        reactor.connectSSL(config['server'], config['sport'], factory,
+                           ssl.ClientContextFactory())
 
     def wait_remote(self, data):
         self.buf.append(data)
@@ -67,7 +70,7 @@ class sock_local(protocol.Protocol):
 
 def run_server():
     factory = protocol.ServerFactory()
-    factory.protocol = sock_local
+    factory.protocol = sock_local_protocol
     reactor.listenTCP(config['port'], factory)
     reactor.run()
 

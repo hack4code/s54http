@@ -67,7 +67,6 @@ class socks5_protocol(protocol.Protocol):
         for method in methods:
             logging.info('method = %x', method)
             if method == 0:
-                # no auth, neato, accept
                 resp = struct.pack('!BB', 5, 0)
                 self.transport.write(resp)
                 self.state = 'wait_connect'
