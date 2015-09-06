@@ -41,13 +41,17 @@ log_level = {'debug': logging.DEBUG,
 
 
 def parse_args(args, config):
-    shortopts = 'dp:S:P:'
+    shortopts = 'dp:k:c:S:P:'
     longopts = 'pid-file='
     optlist, _ = getopt.getopt(args, shortopts, longopts)
     try:
         for k, v in optlist:
             if k == '-p':
                 config['port'] = int(v)
+            elif k == '-k':
+                config['key'] = v
+            elif k == '-c':
+                config['cert'] = v
             elif k == '-S':
                 config['server'] = v
             elif k == '-P':

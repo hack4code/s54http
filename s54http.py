@@ -1,8 +1,16 @@
-from twisted.internet import reactor, protocol
+from twisted.internet import reactor, protocol, ssl
 import struct
 import logging
 import sys
 from utils import daemon, write_pid_file, parse_args
+
+config = {'port': 8000,
+          'daemon': False,
+          'key': 'keys/s54http.key',
+          'cert': 'keys/s54http.crt',
+          'pid-file': 's54http.pid',
+          'log-file': 's54http.log',
+          'log-level': logging.DEBUG}
 
 
 class remote_protocol(protocol.Protocol):
@@ -79,31 +87,24 @@ class socks5_protocol(protocol.Protocol):
             logging.info('connect')
             host = None
             if atyp == 1:  # IP V4
-                logging.info('ipv4')
                 (b1, b2, b3, b4) = struct.unpack('!BBBB', data[:4])
                 host = '%i.%i.%i.%i' % (b1, b2, b3, b4)
                 data = data[4:]
             elif atyp == 3:
-                logging.info('name')
                 l = struct.unpack('!B', data[:1])[0]
                 host = data[1:1+l].decode('utf-8')
                 data = data[1+l:]
-            elif atyp == 4:  # IP V6
-                logging.error('ipv6 not supported')
-                self.transport.loseConnection()
-                return
             else:
+                logging.error('type %d', atyp)
                 self.transport.loseConnection()
                 return
             port = struct.unpack('!H', data[:2])[0]
             data = data[2:]
             logging.info('connecting %s:%d', host, port)
             return self.perform_connect(host, port)
-        elif cmd == 2:
-            logging.error('bind not supported')
-        elif cmd == 3:
-            logging.info('udp not supported')
-        self.transport.loseConnection()
+        else:
+            logging.error('cmd %d not supported', cmd)
+            self.transport.loseConnection()
 
     def send_connect_response(self, code):
         try:
@@ -128,14 +129,10 @@ class socks5_protocol(protocol.Protocol):
 def run_server():
     factory = protocol.ServerFactory()
     factory.protocol = socks5_protocol
-    reactor.listenTCP(config['port'], factory)
+    reactor.listenSSL(config['port'], factory,
+                      ssl.DefaultOpenSSLContextFactory(config['key'],
+                                                       config['cert']))
     reactor.run()
-
-config = {'port': 8000,
-          'daemon': False,
-          'pid-file': 's54http.pid',
-          'log-file': 's54http.log',
-          'log-level': logging.DEBUG}
 
 
 def main():

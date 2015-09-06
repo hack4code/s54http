@@ -1,4 +1,4 @@
-from twisted.internet import reactor, protocol
+from twisted.internet import reactor, protocol, ssl
 import logging
 import sys
 from utils import daemon, parse_args, write_pid_file
@@ -45,7 +45,8 @@ class sock_local(protocol.Protocol):
 
     def connectionMade(self):
         factory = remote_factory(self)
-        reactor.connectTCP(config['server'], config['sport'], factory)
+        reactor.connectSSL(config['server'], config['sport'], factory,
+                           ssl.ClientContextFactory())
         pass
 
     def dataReceived(self, data):
