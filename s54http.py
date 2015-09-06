@@ -1,15 +1,8 @@
 from twisted.internet import reactor, protocol
 import struct
 import logging
-import getopt
 import sys
-import os
-import stat
-import fcntl
-
-config = {'port': 8080,
-          'daemon': False,
-          'pid-file': 's54http.pid'}
+from utils import daemon, write_pid_file, parse_args
 
 
 class remote_protocol(protocol.Protocol):
@@ -132,57 +125,27 @@ class socks5_protocol(protocol.Protocol):
         self.remote.write(data)
 
 
-def daemon():
-    pid = os.fork()
-    if pid > 0:
-        sys.exit(0)
-    sys.stdin.close()
-
-
-def write_pid_file():
-    pid = os.getpid()
-    try:
-        fd = os.open(config['pid-file'], os.O_RDWR | os.O_CREAT,
-                     stat.S_IRUSR | stat.S_IWUSR)
-    except:
-        logging.error('open pid-file %s failed', config['pid-file'])
-        sys.exit(-1)
-    flags = fcntl.fcntl(fd, fcntl.F_GETFD)
-    flags |= fcntl.FD_CLOEXEC
-    r = fcntl.fcntl(fd, fcntl.F_SETFD, flags)
-    try:
-        fcntl.lockf(fd, fcntl.LOCK_EX | fcntl.LOCK_NB, 0, 0, os.SEEK_SET)
-    except IOError:
-        r = os.read(fd, 32)
-        logging.error('already started at pid %d', r)
-        os.close(fd)
-        sys.exit(-1)
-    os.ftruncate(fd, 0)
-    os.write(fd, str(pid).encode('utf8'))
-
-
 def run_server():
     factory = protocol.ServerFactory()
     factory.protocol = socks5_protocol
     reactor.listenTCP(config['port'], factory)
     reactor.run()
 
+config = {'port': 8080,
+          'daemon': False,
+          'pid-file': 's54http.pid',
+          'log-file': 's54http.log',
+          'log-level': logging.DEBUG}
+
 
 def main():
-    shortopts = 'dp:'
-    longopts = 'pid-file='
-    optlist, args = getopt.getopt(sys.argv[1:], shortopts, longopts)
-    for k, v in optlist:
-        if k == '-p':
-            config['port'] = int(v)
-        if k == '-d':
-            config['daemon'] = True
-        if k == 'pid-file=':
-            config['pid-file'] = v
-    logging.basicConfig(level=logging.DEBUG)
+    parse_args(sys.argv[1:], config)
+    logging.basicConfig(filename=config['log-file'],
+                        level=config['log-level'],
+                        format='%(asctime)s %(levelname)-8s %(message)s')
     if config['daemon']:
         daemon()
-    write_pid_file()
+    write_pid_file(config['pid-file'])
     run_server()
 
 if __name__ == '__main__':
