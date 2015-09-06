@@ -5,6 +5,10 @@ import stat
 import fcntl
 import getopt
 
+log_level = {'debug': logging.DEBUG,
+             'info': logging.INFO,
+             'error': logging.ERROR}
+
 
 def daemon():
     pid = os.fork()
@@ -35,13 +39,8 @@ def write_pid_file(pid_file):
     os.write(fd, str(pid).encode('utf8'))
 
 
-log_level = {'debug': logging.DEBUG,
-             'info': logging.INFO,
-             'error': logging.ERROR}
-
-
 def parse_args(args, config):
-    shortopts = 'dp:k:c:S:P:'
+    shortopts = 'dp:k:a:c:S:P:'
     longopts = 'pid-file='
     optlist, _ = getopt.getopt(args, shortopts, longopts)
     try:
@@ -52,6 +51,8 @@ def parse_args(args, config):
                 config['key'] = v
             elif k == '-c':
                 config['cert'] = v
+            elif k == '-a':
+                config['ca'] = v
             elif k == '-S':
                 config['server'] = v
             elif k == '-P':

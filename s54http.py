@@ -128,20 +128,21 @@ class socks5_protocol(protocol.Protocol):
 def run_server():
     factory = protocol.ServerFactory()
     factory.protocol = socks5_protocol
-    reactor.listenSSL(config['port'], factory,
-                      ssl.DefaultOpenSSLContextFactory(config['key'],
-                                                       config['cert']))
+    port, key, cert = config['port'], config['key'], config['cert']
+    reactor.listenSSL(port, factory,
+                      ssl.DefaultOpenSSLContextFactory(key, cert))
     reactor.run()
 
 
 def main():
     parse_args(sys.argv[1:], config)
-    logging.basicConfig(filename=config['log-file'],
-                        level=config['log-level'],
+    log_file, log_level = config['log-file'], config['log-level']
+    logging.basicConfig(filename=log_file, level=log_level,
                         format='%(asctime)s %(levelname)-8s %(message)s')
     if config['daemon']:
         daemon()
-    write_pid_file(config['pid-file'])
+    pid_file = config['pid-file']
+    write_pid_file(pid_file)
     run_server()
 
 if __name__ == '__main__':
