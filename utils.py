@@ -41,19 +41,26 @@ log_level = {'debug': logging.DEBUG,
 
 
 def parse_args(args, config):
-    shortopts = 'dp:'
+    shortopts = 'dp:S:P:'
     longopts = 'pid-file='
-    optlist, args = getopt.getopt(sys.argv[1:], shortopts, longopts)
-    for k, v in optlist:
-        if k == '-p':
-            config['port'] = int(v)
-        elif k == '-d':
-            config['daemon'] = True
-        elif k == 'pid-file=':
-            config['pid-file'] = v
-        elif k == 'log-file=':
-            config['log-file'] = v
-        elif k == 'log-level=':
-            config['log-level'] = log_level[v]
+    optlist, _ = getopt.getopt(args, shortopts, longopts)
+    try:
+        for k, v in optlist:
+            if k == '-p':
+                config['port'] = int(v)
+            elif k == '-S':
+                config['server'] = v
+            elif k == '-P':
+                config['sport'] = int(v)
+            elif k == '-d':
+                config['daemon'] = True
+            elif k == 'pid-file=':
+                config['pid-file'] = v
+            elif k == 'log-file=':
+                config['log-file'] = v
+            elif k == 'log-level=':
+                config['log-level'] = log_level[v]
+    except:
+        logging.error('parse option %s error', k)
     if not config['daemon']:
         config['log-file'] = ''

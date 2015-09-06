@@ -131,7 +131,7 @@ def run_server():
     reactor.listenTCP(config['port'], factory)
     reactor.run()
 
-config = {'port': 8080,
+config = {'port': 8000,
           'daemon': False,
           'pid-file': 's54http.pid',
           'log-file': 's54http.log',
