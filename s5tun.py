@@ -1,37 +1,37 @@
 from twisted.internet import reactor, protocol
 import logging
 import sys
-from OpenSSL import ssl
+from OpenSSL import SSL as ssl
 from utils import daemon, parse_args, write_pid_file
 
 config = {'server': '127.0.0.1',
           'sport': 8000,
           'port': 8080,
-          'daemon': False,
           'ca': 'keys/ca.crt',
           'pid-file': 's5tun.pid',
           'log-file': 's5tun.log',
+          'daemon': False,
           'log-level': logging.DEBUG}
 
 
-def verify(conn, x509, errno, errdepth, retcode):
-    cn = x509.get_subject().commonName
-    if cn != 's54http':
-        return False
-    else:
-        return True
+def verify(conn, x509, errno, errdepth, ok):
+    if ok:
+        cn = x509.get_subject().commonName
+        if cn == 's54http':
+            return True
+    logging.error('socks5 proxy server verify failed')
+    return False
 
 
 class ssl_context_factory:
     isClient = 1
 
     def getContext(self):
-        ctx = ssl.Context(ssl.PROTOCOL_TLSv1)
-        ctx.verify_mode = ssl.CERT_REQUIRED
+        ca = config['ca']
+        ctx = ssl.Context(ssl.TLSv1_2_METHOD)
+        ctx.load_verify_locations(ca)
         ctx.set_verify(ssl.VERIFY_PEER | ssl.VERIFY_FAIL_IF_NO_PEER_CERT,
                        verify)
-        ca = config['ca']
-        ctx.load_verify_locations(cafile=ca)
         return ctx
 
 
@@ -90,6 +90,7 @@ class sock_local_protocol(protocol.Protocol):
         self.state = 'send_remote'
         for data in self.buf:
             self.send_remote(data)
+        self.buf = []
 
 
 def run_server():
