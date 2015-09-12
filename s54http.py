@@ -143,7 +143,7 @@ def run_server():
     ca, key, cert = config['ca'], config['key'], config['cert']
     factory = protocol.ServerFactory()
     factory.protocol = socks5_protocol
-    ctx_factory = ssl_ctx_factory(ca, key, cert, verify_tun)
+    ctx_factory = ssl_ctx_factory(cert, key, cert, verify_tun)
     ctx_factory.isClient = 0
     reactor.listenSSL(port, factory, ctx_factory)
     reactor.run()
