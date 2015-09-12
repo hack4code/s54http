@@ -8,7 +8,7 @@ import sys
 
 from utils import daemon, write_pid_file, parse_args, ssl_ctx_factory
 
-config = {'port': 8000,
+config = {'port': 6666,
           'ca': 'keys/ca.crt',
           'key': 'keys/s54http.key',
           'cert': 'keys/s54http.crt',
@@ -24,7 +24,7 @@ def verify_tun(conn, x509, errno, errdepth, ok):
         if cn == 's54http' or cn == 's5tun':
             return True
     logging.error('socks5 client verify failed: errno=%d cn=%s', errno, cn)
-    return False
+    return True
 
 
 class remote_protocol(protocol.Protocol):
@@ -146,6 +146,7 @@ def run_server():
     factory = protocol.ServerFactory()
     factory.protocol = socks5_protocol
     ctx_factory = ssl_ctx_factory(ca, key, cert, verify_tun)
+    ctx_factory.isClient = 0
     reactor.listenSSL(port, factory, ctx_factory)
     reactor.run()
 
