@@ -80,10 +80,12 @@ class sock_local_protocol(protocol.Protocol):
         method(data)
 
     def connect_remote(self):
-        factory = sock_remote_factory(self)
-        reactor.connectSSL(self.saddr, self.sport, factory, self.ctx_factory)
+        remote_factory = sock_remote_factory(self)
+        reactor.connectSSL(self.saddr, self.sport,
+                           remote_factory, self.ctx_factory)
 
     def wait_remote(self, data):
+        # save data when not connected proxy server
         self.buf.append(data)
 
     def send_remote(self, data):
