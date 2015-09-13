@@ -20,8 +20,9 @@ config = {'port': 6666,
 
 
 def verify_tun(conn, x509, errno, errdepth, ok):
+    cn = x509.get_subject().commonName
+    logging.debug("cn: %s errno: %d errdepth: %d", cn,  errno, errdepth)
     if not ok:
-        cn = x509.get_subject().commonName
         logging.error('client verify failed: errno=%d cn=%s', errno, cn)
     return ok
 
