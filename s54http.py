@@ -122,11 +122,11 @@ class socks5_protocol(protocol.Protocol):
             elif atyp == 3:  # name
                 if (len(self.buf) < 5):
                     return
-                (nlen) = struct.unpack('!B', self.buf[4:5])
+                (nlen, ) = struct.unpack('!B', self.buf[4:5])
                 if (len(self.buf) < (5 + nlen + 2)):
                     return
                 host = self.buf[5:5+nlen].decode('utf-8')
-                (port) = struct.unpack('!H', self.buf[5+nlen:7+nlen])
+                (port, ) = struct.unpack('!H', self.buf[5+nlen:7+nlen])
                 self.buf = b''
                 d = reactor.resolve(host)
 
