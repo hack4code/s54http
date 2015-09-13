@@ -19,12 +19,11 @@ config = {'port': 8000,
 
 
 def verify_tun(conn, x509, errno, errdepth, ok):
+    cn = x509.get_subject().commonName
     if ok:
-        cn = x509.get_subject().commonName
-        logging.info('cn: %s', cn)
         if cn == 's54http' or cn == 's5tun':
             return True
-    logging.error('socks5 client verify failed: errno=%d', errno)
+    logging.error('socks5 client verify failed: errno=%d cn=%s', errno, cn)
     return False
 
 
