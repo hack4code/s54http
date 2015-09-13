@@ -6,7 +6,8 @@ import struct
 import logging
 import sys
 
-from utils import daemon, write_pid_file, parse_args, ssl_ctx_factory
+from utils import daemon, write_pid_file, parse_args, \
+    ssl_ctx_factory, dns_cache
 
 config = {'port': 6666,
           'ca': 'keys/ca.crt',
@@ -56,6 +57,9 @@ class remote_factory(protocol.ClientFactory):
         logging.info('connetion to %s closed: %s',
                      self.remote_host, reason.getErrorMessage())
         self.local_sock.transport.loseConnection()
+
+
+ncache = dns_cache(10000)
 
 
 class socks5_protocol(protocol.Protocol):
@@ -128,15 +132,24 @@ class socks5_protocol(protocol.Protocol):
                 host = self.buf[5:5+nlen].decode('utf-8')
                 (port, ) = struct.unpack('!H', self.buf[5+nlen:7+nlen])
                 self.buf = b''
-                d = reactor.resolve(host)
 
-                def resolve_ok(addr, port):
+                if host in ncache:
                     self.state = 'waitRemoteConnection'
                     logging.info('state: waitRemoteConnection')
+                    self.connectRemote(ncache[host], port)
+                    logging.info('connect %s:%d', host, port)
+                    return
+
+                d = reactor.resolve(host)
+
+                def resolve_ok(addr, host, port):
+                    self.state = 'waitRemoteConnection'
+                    logging.info('state: waitRemoteConnection')
+                    ncache[host] = addr
                     self.connectRemote(addr, port)
                     logging.info('connecting %s:%d', addr, port)
 
-                d.addCallback(resolve_ok, port)
+                d.addCallback(resolve_ok, host, port)
 
                 def resolve_err(res):
                     logging.error('name resolve err: %s', res)

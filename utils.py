@@ -4,11 +4,23 @@ import logging
 import stat
 import fcntl
 import getopt
+from collections import OrderedDict
 from OpenSSL import SSL as ssl
 
 log_level = {'debug': logging.DEBUG,
              'info': logging.INFO,
              'error': logging.ERROR}
+
+
+class dns_cache(OrderedDict):
+    def __init__(self, limit=None):
+        super(dns_cache, self).__init__()
+        self.limit = limit
+
+    def __setitem__(self, key, value):
+        while len(self) >= self.limit:
+            self.popitem(last=False)
+        super(dns_cache, self).__setitem__(key, value)
 
 
 class ssl_ctx_factory:
