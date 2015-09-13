@@ -21,9 +21,8 @@ config = {'server': '139.162.10.135',
 
 
 def verify_proxy(conn, x509, errno, errdepth, ok):
-    cn = x509.get_subject().commonName
-    logging.debug("cn: %s errno: %d errdepth: %d", cn, errno, errdepth)
     if not ok:
+        cn = x509.get_subject().commonName
         logging.error('socks5 proxy server verify failed: errno=%d cn=%s',
                       errno, cn)
     return ok
@@ -32,7 +31,7 @@ def verify_proxy(conn, x509, errno, errdepth, ok):
 class sock_remote_protocol(protocol.Protocol):
     def connectionMade(self):
         self.local_sock = self.factory.local_sock
-        self.local_sock.remoteConnectionMade(self.transport)
+        self.local_sock.remoteConnectionMade(self)
 
     def dataReceived(self, data):
         self.local_sock.transport.write(data)
@@ -88,7 +87,7 @@ class sock_local_protocol(protocol.Protocol):
         self.buf += data
 
     def send_remote(self, data):
-        self.remote_sock.write(data)
+        self.remote_sock.transport.write(data)
 
     def remoteConnectionMade(self, sock):
         self.remote_sock = sock

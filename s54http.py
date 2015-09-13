@@ -20,9 +20,8 @@ config = {'port': 6666,
 
 
 def verify_tun(conn, x509, errno, errdepth, ok):
-    cn = x509.get_subject().commonName
-    logging.debug("cn: %s errno: %d errdepth: %d", cn,  errno, errdepth)
     if not ok:
+        cn = x509.get_subject().commonName
         logging.error('client verify failed: errno=%d cn=%s', errno, cn)
     return ok
 
@@ -46,7 +45,7 @@ class remote_factory(protocol.ClientFactory):
         self.remote_host = host
 
     def clientConnectionFailed(self, connector, reason):
-        logging.error('connect to %s failed: %s',
+        logging.error('connect %s failed: %s',
                       self.remote_host, reason.getErrorMessage())
         self.socks5.send_connect_response(5)
         self.socks5.transport.loseConnection()
