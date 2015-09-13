@@ -10,6 +10,7 @@ from utils import daemon, write_pid_file, parse_args, ssl_ctx_factory
 
 config = {'port': 6666,
           'ca': 'keys/ca.crt',
+          'capath': 'keys/',
           'key': 'keys/s54http.key',
           'cert': 'keys/s54http.crt',
           'pid-file': 's54http.pid',
@@ -140,11 +141,11 @@ class socks5_protocol(protocol.Protocol):
 
 def run_server():
     port = config['port']
-    ca, key, cert = config['ca'], config['key'], config['cert']
+    ca, capath = config['ca'], config['capath']
+    key, cert = config['key'], config['cert']
     factory = protocol.ServerFactory()
     factory.protocol = socks5_protocol
-    ctx_factory = ssl_ctx_factory(ca, key, cert, verify_tun)
-    ctx_factory.isClient = 0
+    ctx_factory = ssl_ctx_factory(False, ca, capath, key, cert, verify_tun)
     reactor.listenSSL(port, factory, ctx_factory)
     reactor.run()
 

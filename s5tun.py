@@ -11,6 +11,7 @@ config = {'server': '139.162.10.135',
           'sport': 6666,
           'port': 8080,
           'ca': 'keys/ca.crt',
+          'capath': 'keys/',
           'key': 'keys/s5tun.key',
           'cert': 'keys/s5tun.crt',
           'pid-file': 's5tun.pid',
@@ -67,11 +68,12 @@ class sock_local_protocol(protocol.Protocol):
         method(data)
 
     def connect_remote(self):
-        ca, key, cert = config['ca'], config['key'], config['cert']
+        ca, capath = config['ca'], config['capath']
+        key, cert = config['key'], config['cert']
         addr, port = config['server'], config['sport']
         factory = sock_remote_factory(self)
-        ctx_factory = ssl_ctx_factory(ca, key, cert, verify_proxy)
-        ctx_factory.isClient = 1
+        ctx_factory = ssl_ctx_factory(True, ca, capath, key, cert,
+                                      verify_proxy)
         reactor.connectSSL(addr, port, factory, ctx_factory)
 
     def wait_remote(self, data):

@@ -12,10 +12,14 @@ log_level = {'debug': logging.DEBUG,
 
 
 class ssl_ctx_factory:
+    isClient = 1
     _ctx = None
 
-    def __init__(self, ca, key, cert, verify):
+    def __init__(self, client, ca, capath, key, cert, verify):
+        if not client:
+            self.isClient = 0
         self._ca = ca
+        self._capath = capath
         self._key = key
         self._cert = cert
         self._verify = verify
@@ -27,7 +31,7 @@ class ssl_ctx_factory:
             ctx.set_options(ssl.OP_NO_SSLv2)
             ctx.use_privatekey_file(self._key)
             ctx.use_certificate_file(self._cert)
-            ctx.load_verify_locations(self._ca)
+            ctx.load_verify_locations(self._ca, capath=self._capath)
             ctx.set_verify(ssl.VERIFY_PEER |
                            ssl.VERIFY_FAIL_IF_NO_PEER_CERT |
                            ssl.VERIFY_CLIENT_ONCE,
@@ -76,7 +80,7 @@ def write_pid_file(pid_file):
 
 
 def parse_args(args, config):
-    shortopts = 'dp:k:a:c:S:P:'
+    shortopts = 'dp:k:a:c:S:P:r:'
     longopts = ['pid-file=', 'log-file=', 'log-level=']
     optlist, _ = getopt.getopt(args, shortopts, longopts)
     try:
@@ -89,6 +93,8 @@ def parse_args(args, config):
                 config['cert'] = v
             elif k == '-a':
                 config['ca'] = v
+            elif k == '-r':
+                config['capath'] = v
             elif k == '-S':
                 config['server'] = v
             elif k == '-P':
