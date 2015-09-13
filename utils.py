@@ -12,12 +12,12 @@ log_level = {'debug': logging.DEBUG,
 
 
 class ssl_ctx_factory:
-    isClient = 1
+    isClient = True
+    method = ssl.TLSv1_2_METHOD
     _ctx = None
 
     def __init__(self, client, ca, capath, key, cert, verify):
-        if not client:
-            self.isClient = 0
+        self.isClient = client
         self._ca = ca
         self._capath = capath
         self._key = key
@@ -29,8 +29,9 @@ class ssl_ctx_factory:
         if self._ctx is None:
             ctx = ssl.Context(ssl.TLSv1_2_METHOD)
             ctx.set_options(ssl.OP_NO_SSLv2)
-            ctx.use_privatekey_file(self._key)
             ctx.use_certificate_file(self._cert)
+            ctx.use_privatekey_file(self._key)
+            ctx.check_privatekey()
             ctx.load_verify_locations(self._ca, capath=self._capath)
             ctx.set_verify(ssl.VERIFY_PEER |
                            ssl.VERIFY_FAIL_IF_NO_PEER_CERT |
@@ -40,7 +41,7 @@ class ssl_ctx_factory:
 
     def __getstate__(self):
         d = self.__dict__.copy()
-        del d['_context']
+        del d['_ctx']
         return d
 
     def __setstate__(self, state):

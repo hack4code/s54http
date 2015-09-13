@@ -32,8 +32,7 @@ def verify_proxy(conn, x509, errno, errdepth, ok):
 class sock_remote_protocol(protocol.Protocol):
     def connectionMade(self):
         self.local_sock = self.factory.local_sock
-        self.local_sock.remote = self.transport
-        self.local_sock.remoteConnectionMade()
+        self.local_sock.remoteConnectionMade(self.transport)
 
     def dataReceived(self, data):
         self.local_sock.transport.write(data)
@@ -73,7 +72,7 @@ class sock_local_factory(protocol.ServerFactory):
 class sock_local_protocol(protocol.Protocol):
     def __init__(self):
         self.state = 'wait_remote'
-        self.buf = []
+        self.buf = b''
 
     def dataReceived(self, data):
         method = getattr(self, self.state)
@@ -86,21 +85,20 @@ class sock_local_protocol(protocol.Protocol):
 
     def wait_remote(self, data):
         # save data when not connected proxy server
-        self.buf.append(data)
+        self.buf += data
 
     def send_remote(self, data):
-        self.remote.write(data)
+        self.remote_sock.write(data)
 
-    def remoteConnectionMade(self):
+    def remoteConnectionMade(self, sock):
+        self.remote_sock = sock
         self.state = 'send_remote'
-        for data in self.buf:
-            self.send_remote(data)
-        self.buf = []
+        self.send_remote(self.buf)
 
 
 def run_server(port, saddr, sport, ca, capath, key, cert):
-    factory = sock_local_factory(saddr, sport, ca, capath, key, cert)
-    reactor.listenTCP(port, factory)
+    local_factory = sock_local_factory(saddr, sport, ca, capath, key, cert)
+    reactor.listenTCP(port, local_factory)
     reactor.run()
 
 
