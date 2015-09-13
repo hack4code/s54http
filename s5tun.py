@@ -7,8 +7,8 @@ import sys
 
 from utils import daemon, parse_args, write_pid_file, ssl_ctx_factory
 
-config = {'server': '127.0.0.1',
-          'sport': 8000,
+config = {'server': '139.162.10.135',
+          'sport': 6666,
           'port': 8080,
           'ca': 'keys/ca.crt',
           'key': 'keys/s5tun.key',
@@ -20,12 +20,11 @@ config = {'server': '127.0.0.1',
 
 
 def verify_proxy(conn, x509, errno, errdepth, ok):
-    cn = x509.get_subject().commonName
-    if ok and cn == 's54http':
-        return True
-    logging.error('socks5 proxy server verify failed: errno=%d cn=%s',
-                  errno, cn)
-    return False
+    if not ok:
+        cn = x509.get_subject().commonName
+        logging.error('socks5 proxy server verify failed: errno=%d cn=%s',
+                      errno, cn)
+    return ok
 
 
 class sock_remote_protocol(protocol.Protocol):
@@ -72,6 +71,7 @@ class sock_local_protocol(protocol.Protocol):
         addr, port = config['server'], config['sport']
         factory = sock_remote_factory(self)
         ctx_factory = ssl_ctx_factory(ca, key, cert, verify_proxy)
+        ctx_factory.isClient = 1
         reactor.connectSSL(addr, port, factory, ctx_factory)
 
     def wait_remote(self, data):
