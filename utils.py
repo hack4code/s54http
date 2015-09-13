@@ -75,7 +75,7 @@ def write_pid_file(pid_file):
 
 def parse_args(args, config):
     shortopts = 'dp:k:a:c:S:P:'
-    longopts = 'pid-file='
+    longopts = ['pid-file=', 'log-file=', 'log-level=']
     optlist, _ = getopt.getopt(args, shortopts, longopts)
     try:
         for k, v in optlist:

@@ -20,11 +20,11 @@ config = {'server': '127.0.0.1',
 
 
 def verify_proxy(conn, x509, errno, errdepth, ok):
-    if ok:
-        cn = x509.get_subject().commonName
-        if cn == 's54http':
-            return True
-    logging.error('socks5 proxy server verify failed: errno=%d', errno)
+    cn = x509.get_subject().commonName
+    if ok and cn == 's54http':
+        return True
+    logging.error('socks5 proxy server verify failed: errno=%d cn=%s',
+                  errno, cn)
     return False
 
 
