@@ -19,12 +19,10 @@ config = {'port': 6666,
 
 
 def verify_tun(conn, x509, errno, errdepth, ok):
-    cn = x509.get_subject().commonName
-    if ok:
-        if cn == 's54http' or cn == 's5tun':
-            return True
-    logging.error('socks5 client verify failed: errno=%d cn=%s', errno, cn)
-    return True
+    if not ok:
+        cn = x509.get_subject().commonName
+        logging.error('client verify failed: errno=%d cn=%s', errno, cn)
+    return ok
 
 
 class remote_protocol(protocol.Protocol):
