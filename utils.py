@@ -28,7 +28,9 @@ class ssl_ctx_factory:
             ctx.use_privatekey_file(self._key)
             ctx.use_certificate_file(self._cert)
             ctx.load_verify_locations(self._ca)
-            ctx.set_verify(ssl.VERIFY_PEER | ssl.VERIFY_FAIL_IF_NO_PEER_CERT,
+            ctx.set_verify(ssl.VERIFY_PEER |
+                           ssl.VERIFY_FAIL_IF_NO_PEER_CERT |
+                           ssl.VERIFY_CLIENT_ONCE,
                            self._verify)
             self._ctx = ctx
 
