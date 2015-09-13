@@ -1,38 +1,31 @@
+#! /bin/env python
+
+
 from twisted.internet import reactor, protocol
 import logging
 import sys
-from OpenSSL import SSL as ssl
-from utils import daemon, parse_args, write_pid_file
+
+from utils import daemon, parse_args, write_pid_file, ssl_ctx_factory
 
 config = {'server': '127.0.0.1',
           'sport': 8000,
           'port': 8080,
           'ca': 'keys/ca.crt',
+          'key': 'keys/s5tun.key',
+          'cert': 'keys/s5tun.crt',
           'pid-file': 's5tun.pid',
           'log-file': 's5tun.log',
           'daemon': False,
           'log-level': logging.DEBUG}
 
 
-def verify(conn, x509, errno, errdepth, ok):
+def verify_proxy(conn, x509, errno, errdepth, ok):
     if ok:
         cn = x509.get_subject().commonName
         if cn == 's54http':
             return True
-    logging.error('socks5 proxy server verify failed')
+    logging.error('socks5 proxy server verify failed: errno=%d', errno)
     return False
-
-
-class ssl_context_factory:
-    isClient = 1
-
-    def getContext(self):
-        ca = config['ca']
-        ctx = ssl.Context(ssl.TLSv1_2_METHOD)
-        ctx.load_verify_locations(ca)
-        ctx.set_verify(ssl.VERIFY_PEER | ssl.VERIFY_FAIL_IF_NO_PEER_CERT,
-                       verify)
-        return ctx
 
 
 class sock_remote_protocol(protocol.Protocol):
@@ -75,9 +68,10 @@ class sock_local_protocol(protocol.Protocol):
         method(data)
 
     def connect_remote(self):
-        factory = sock_remote_factory(self)
-        ctx_factory = ssl_context_factory()
+        ca, key, cert = config['ca'], config['key'], config['cert']
         addr, port = config['server'], config['sport']
+        factory = sock_remote_factory(self)
+        ctx_factory = ssl_ctx_factory(ca, key, cert, verify_proxy)
         reactor.connectSSL(addr, port, factory, ctx_factory)
 
     def wait_remote(self, data):

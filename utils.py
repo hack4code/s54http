@@ -4,10 +4,44 @@ import logging
 import stat
 import fcntl
 import getopt
+from OpenSSL import SSL as ssl
 
 log_level = {'debug': logging.DEBUG,
              'info': logging.INFO,
              'error': logging.ERROR}
+
+
+class ssl_ctx_factory:
+    _ctx = None
+
+    def __init__(self, ca, key, cert, verify):
+        self._ca = ca
+        self._key = key
+        self._cert = cert
+        self._verify = verify
+        self.cacheContext()
+
+    def cacheContext(self):
+        if self._ctx is None:
+            ctx = ssl.Context(ssl.TLSv1_2_METHOD)
+            ctx.set_options(ssl.OP_NO_SSLv2)
+            ctx.use_privatekey_file(self._key)
+            ctx.use_certificate_file(self._cert)
+            ctx.load_verify_locations(self._ca)
+            ctx.set_verify(ssl.VERIFY_PEER | ssl.VERIFY_FAIL_IF_NO_PEER_CERT,
+                           self._verify)
+            self._ctx = ctx
+
+    def __getstate__(self):
+        d = self.__dict__.copy()
+        del d['_context']
+        return d
+
+    def __setstate__(self, state):
+        self.__dict__ = state
+
+    def getContext(self):
+        return self._ctx
 
 
 def daemon():

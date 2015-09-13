@@ -1,16 +1,31 @@
-from twisted.internet import reactor, protocol, ssl
+#! /bin/env python
+
+
+from twisted.internet import reactor, protocol
 import struct
 import logging
 import sys
-from utils import daemon, write_pid_file, parse_args
+
+from utils import daemon, write_pid_file, parse_args, ssl_ctx_factory
 
 config = {'port': 8000,
-          'daemon': False,
+          'ca': 'keys/ca.crt',
           'key': 'keys/s54http.key',
           'cert': 'keys/s54http.crt',
           'pid-file': 's54http.pid',
           'log-file': 's54http.log',
+          'daemon': False,
           'log-level': logging.DEBUG}
+
+
+def verify_tun(conn, x509, errno, errdepth, ok):
+    if ok:
+        cn = x509.get_subject().commonName
+        logging.info('cn: %s', cn)
+        if cn == 's54http' or cn == 's5tun':
+            return True
+    logging.error('socks5 client verify failed: errno=%d', errno)
+    return False
 
 
 class remote_protocol(protocol.Protocol):
@@ -79,6 +94,7 @@ class socks5_protocol(protocol.Protocol):
     def wait_connect(self, data):
         (ver, cmd, rsv, atyp) = struct.unpack('!BBBB', data[:4])
         if ver != 5 or rsv != 0:
+            logging.error('ver: %d rsv: %d', ver, rsv)
             self.transport.loseConnection()
             return
         data = data[4:]
@@ -126,11 +142,12 @@ class socks5_protocol(protocol.Protocol):
 
 
 def run_server():
+    port = config['port']
+    ca, key, cert = config['ca'], config['key'], config['cert']
     factory = protocol.ServerFactory()
     factory.protocol = socks5_protocol
-    port, key, cert = config['port'], config['key'], config['cert']
-    reactor.listenSSL(port, factory,
-                      ssl.DefaultOpenSSLContextFactory(key, cert))
+    ctx_factory = ssl_ctx_factory(ca, key, cert, verify_tun)
+    reactor.listenSSL(port, factory, ctx_factory)
     reactor.run()
 
 
