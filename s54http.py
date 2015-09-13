@@ -140,10 +140,7 @@ class socks5_protocol(protocol.Protocol):
         self.remote.write(data)
 
 
-def run_server():
-    port = config['port']
-    ca, capath = config['ca'], config['capath']
-    key, cert = config['key'], config['cert']
+def run_server(port, ca, capath, key, cert):
     factory = protocol.ServerFactory()
     factory.protocol = socks5_protocol
     ctx_factory = ssl_ctx_factory(False, ca, capath, key, cert, verify_tun)
@@ -154,13 +151,16 @@ def run_server():
 def main():
     parse_args(sys.argv[1:], config)
     log_file, log_level = config['log-file'], config['log-level']
+    pid_file = config['pid-file']
+    port = config['port']
+    ca, capath = config['ca'], config['capath']
+    key, cert = config['key'], config['cert']
     logging.basicConfig(filename=log_file, level=log_level,
                         format='%(asctime)s %(levelname)-8s %(message)s')
     if config['daemon']:
         daemon()
-    pid_file = config['pid-file']
     write_pid_file(pid_file)
-    run_server()
+    run_server(port, ca, capath, key, cert)
 
 if __name__ == '__main__':
     main()

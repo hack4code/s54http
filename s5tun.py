@@ -21,8 +21,9 @@ config = {'server': '139.162.10.135',
 
 
 def verify_proxy(conn, x509, errno, errdepth, ok):
+    cn = x509.get_subject().commonName
+    logging.debug("cn: %s errno: %d errdepth: %d", cn, errno, errdepth)
     if not ok:
-        cn = x509.get_subject().commonName
         logging.error('socks5 proxy server verify failed: errno=%d cn=%s',
                       errno, cn)
     return ok
@@ -54,27 +55,33 @@ class sock_remote_factory(protocol.ClientFactory):
         self.local_sock.transport.loseConnection()
 
 
+class sock_local_factory(protocol.ServerFactory):
+    def __init__(self, saddr, sport, ca, capath, key, cert):
+        self.saddr, self.sport = saddr, sport
+        self.ctx_factory = ssl_ctx_factory(True, ca, capath, key, cert,
+                                           verify_proxy)
+        self.protocol = sock_local_protocol
+
+    def buildProtocol(self, addr):
+        p = protocol.ServerFactory.buildProtocol(self, addr)
+        p.saddr, p.sport = self.saddr, self.sport
+        p.ctx_factory = self.ctx_factory
+        p.connect_remote()
+        return p
+
+
 class sock_local_protocol(protocol.Protocol):
     def __init__(self):
         self.state = 'wait_remote'
         self.buf = []
-        self.connect_remote()
-
-    def connectionMade(self):
-        pass
 
     def dataReceived(self, data):
         method = getattr(self, self.state)
         method(data)
 
     def connect_remote(self):
-        ca, capath = config['ca'], config['capath']
-        key, cert = config['key'], config['cert']
-        addr, port = config['server'], config['sport']
         factory = sock_remote_factory(self)
-        ctx_factory = ssl_ctx_factory(True, ca, capath, key, cert,
-                                      verify_proxy)
-        reactor.connectSSL(addr, port, factory, ctx_factory)
+        reactor.connectSSL(self.saddr, self.sport, factory, self.ctx_factory)
 
     def wait_remote(self, data):
         self.buf.append(data)
@@ -89,10 +96,8 @@ class sock_local_protocol(protocol.Protocol):
         self.buf = []
 
 
-def run_server():
-    factory = protocol.ServerFactory()
-    factory.protocol = sock_local_protocol
-    port = config['port']
+def run_server(port, saddr, sport, ca, capath, key, cert):
+    factory = sock_local_factory(saddr, sport, ca, capath, key, cert)
     reactor.listenTCP(port, factory)
     reactor.run()
 
@@ -100,13 +105,17 @@ def run_server():
 def main():
     parse_args(sys.argv[1:], config)
     log_file, log_level = config['log-file'], config['log-level']
+    port = config['port']
+    saddr, sport = config['server'], config['sport']
+    ca, capath = config['ca'], config['capath']
+    key, cert = config['key'], config['cert']
+    pid_file = config['pid-file']
     logging.basicConfig(filename=log_file, level=log_level,
                         format='%(asctime)s %(levelname)-8s %(message)s')
     if config['daemon']:
         daemon()
-    pid_file = config['pid-file']
     write_pid_file(pid_file)
-    run_server()
+    run_server(port, saddr, sport, ca, capath, key, cert)
 
 if __name__ == '__main__':
     main()
