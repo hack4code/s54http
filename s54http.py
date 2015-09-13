@@ -30,9 +30,9 @@ class remote_protocol(protocol.Protocol):
     def connectionMade(self):
         self.socks5 = self.factory.socks5
         # send success to client
-        self.socks5.send_connect_response(0)
+        self.socks5.sendConresp(0)
         self.socks5.remote = self.transport
-        self.socks5.state = 'communicate'
+        self.socks5.state = 'sendRemote'
 
     def dataReceived(self, data):
         self.socks5.transport.write(data)
@@ -47,7 +47,7 @@ class remote_factory(protocol.ClientFactory):
     def clientConnectionFailed(self, connector, reason):
         logging.error('connect %s failed: %s',
                       self.remote_host, reason.getErrorMessage())
-        self.socks5.send_connect_response(5)
+        self.socks5.sendConresp(5)
         self.socks5.transport.loseConnection()
 
     def clientConnectionLost(self, connector, reason):
@@ -57,14 +57,15 @@ class remote_factory(protocol.ClientFactory):
 
 
 class socks5_protocol(protocol.Protocol):
+
     def connectionMade(self):
-        self.state = 'wait_hello'
+        self.state = 'waitHello'
 
     def dataReceived(self, data):
         method = getattr(self, self.state)
         method(data)
 
-    def wait_hello(self, data):
+    def waitHello(self, data):
         (ver, nmethods) = struct.unpack('!BB', data[:2])
         logging.info('version = %d, nmethods = %d' %
                      (ver, nmethods))
@@ -82,14 +83,11 @@ class socks5_protocol(protocol.Protocol):
             if method == 0:
                 resp = struct.pack('!BB', 5, 0)
                 self.transport.write(resp)
-                self.state = 'wait_connect'
-                return
-            if method == 255:
-                self.transport.loseConnection()
+                self.state = 'waitConnectRemote'
                 return
         self.transport.loseConnection()
 
-    def wait_connect(self, data):
+    def waitConnectRemote(self, data):
         (ver, cmd, rsv, atyp) = struct.unpack('!BBBB', data[:4])
         if ver != 5 or rsv != 0:
             logging.error('ver: %d rsv: %d', ver, rsv)
@@ -99,11 +97,11 @@ class socks5_protocol(protocol.Protocol):
         if cmd == 1:
             logging.info('connect')
             host = None
-            if atyp == 1:  # IP V4
+            if atyp == 1:  # addr
                 (b1, b2, b3, b4) = struct.unpack('!BBBB', data[:4])
                 host = '%i.%i.%i.%i' % (b1, b2, b3, b4)
                 data = data[4:]
-            elif atyp == 3:
+            elif atyp == 3:  # name
                 l = struct.unpack('!B', data[:1])[0]
                 host = data[1:1+l].decode('utf-8')
                 data = data[1+l:]
@@ -114,12 +112,38 @@ class socks5_protocol(protocol.Protocol):
             port = struct.unpack('!H', data[:2])[0]
             data = data[2:]
             logging.info('connecting %s:%d', host, port)
-            return self.perform_connect(host, port)
+            if atyp == 3:
+                d = reactor.resolve(host)
+                d.addCallback(self.connectRemote, port)
+
+                def resolve_err(res):
+                    logging.error('name resolve err: %s', res)
+                    self.sendConresp(5)
+                    self.transport.loseConnection()
+
+                d.addErrback(resolve_err)
+                self.state = 'waitNameres'
+                return
+            self.state = 'waitRemoteconn'
+            return self.connectRemote(host, port)
         else:
             logging.error('cmd %d not supported', cmd)
             self.transport.loseConnection()
 
-    def send_connect_response(self, code):
+    def waitNameres(self, data):
+        logging.error('recv data when resolving')
+
+    def waitRemoteconn(self, data):
+        logging.error('recv data when connecting remote')
+
+    def sendRemote(self, data):
+        self.remote_sock.transport.write(data)
+
+    def remoteConnectionmade(self, sock):
+        self.remote_sock = sock
+        self.state = 'sendRemote'
+
+    def sendConresp(self, code):
         try:
             myname = self.transport.getHost().host
         except:
@@ -131,12 +155,9 @@ class socks5_protocol(protocol.Protocol):
         resp += struct.pack('!H', self.transport.getHost().port)
         self.transport.write(resp)
 
-    def perform_connect(self, host, port):
+    def connectRemote(self, host, port):
         factory = remote_factory(self, host=host)
         reactor.connectTCP(host, port, factory)
-
-    def communicate(self, data):
-        self.remote.write(data)
 
 
 def run_server(port, ca, capath, key, cert):
