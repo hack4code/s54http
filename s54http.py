@@ -27,8 +27,9 @@ def verify_tun(conn, x509, errno, errdepth, ok):
 
 
 class remote_protocol(protocol.Protocol):
+
     def connectionMade(self):
-        self.local_sock.remoteConnectionmade(self)
+        self.local_sock.remoteConnectionMade(self)
 
     def dataReceived(self, data):
         self.local_sock.transport.write(data)
@@ -48,7 +49,7 @@ class remote_factory(protocol.ClientFactory):
     def clientConnectionFailed(self, connector, reason):
         logging.error('connect %s failed: %s',
                       self.remote_host, reason.getErrorMessage())
-        self.local_sock.sendConresp(5)
+        self.local_sock.sendConnectReply(5)
         self.local_sock.transport.loseConnection()
 
     def clientConnectionLost(self, connector, reason):
@@ -61,64 +62,77 @@ class socks5_protocol(protocol.Protocol):
 
     def connectionMade(self):
         self.state = 'waitHello'
+        self.buf = b''
 
     def dataReceived(self, data):
         method = getattr(self, self.state)
         method(data)
 
     def waitHello(self, data):
-        (ver, nmethods) = struct.unpack('!BB', data[:2])
+        self.buf += data
+        if len(self.buf) < 2:
+            return
+        (ver, nmethods) = struct.unpack('!BB', self.buf[:2])
         logging.info('version = %d, nmethods = %d' %
                      (ver, nmethods))
         if ver != 5:
             logging.error('socks %d not supported', ver)
+            self.sendHelloReply(0xFF)
             self.transport.loseConnection()
             return
         if nmethods < 1:
             logging.error('no method')
+            self.sendHelloReply(0xFF)
             self.transport.loseConnection()
             return
-        methods = data[2:2+nmethods]
-        for method in methods:
-            logging.info('method = %x', method)
-            if method == 0:
-                resp = struct.pack('!BB', 5, 0)
-                self.transport.write(resp)
+        if len(self.buf) < (nmethods + 2):
+            return
+        for method in self.buf[2:2+nmethods]:
+            if method == 0:  # no authentication
+                self.buf = b''
                 self.state = 'waitConnectRemote'
                 logging.info('state: waitConnectRemote')
+                self.sendHelloReply(0)
                 return
+        self.sendHelloReply(0xFF)
         self.transport.loseConnection()
 
     def waitConnectRemote(self, data):
+        self.buf += data
+        if (len(self.buf) < 4):
+            return
         (ver, cmd, rsv, atyp) = struct.unpack('!BBBB', data[:4])
         if ver != 5 or rsv != 0:
             logging.error('ver: %d rsv: %d', ver, rsv)
             self.transport.loseConnection()
             return
-        data = data[4:]
         if cmd == 1:
             if atyp == 1:  # addr
-                (b1, b2, b3, b4) = struct.unpack('!BBBB', data[:4])
+                if (len(self.buf) < 10):
+                    return
+                (b1, b2, b3, b4) = struct.unpack('!BBBB', self.buf[4:8])
                 host = '%i.%i.%i.%i' % (b1, b2, b3, b4)
-                data = data[4:]
-                port = struct.unpack('!H', data[:2])[0]
-                data = data[2:]
-                self.state = 'waitRemoteconn'
-                logging.info('state: waitRemoteconn')
+                (port) = struct.unpack('!H', self.buf[8:10])
+                self.buf = b''
+                self.state = 'waitRemoteConnection'
+                logging.info('state: waitRemoteConnection')
                 self.connectRemote(host, port)
                 logging.info('connect %s:%d', host, port)
                 return
             elif atyp == 3:  # name
-                l = struct.unpack('!B', data[:1])[0]
-                host = data[1:1+l].decode('utf-8')
-                data = data[1+l:]
-                port = struct.unpack('!H', data[:2])[0]
-                data = data[2:]
+                if (len(self.buf) < 5):
+                    return
+                (nlen) = struct.unpack('!B', self.buf[4:5])
+                if (len(self.buf) < (5 + nlen + 2)):
+                    return
+                host = self.buf[5:5+nlen].decode('utf-8')
+                (port) = struct.unpack('!H', self.buf[5+nlen:7+nlen])
+                self.buf = b''
                 d = reactor.resolve(host)
 
                 def resolve_ok(addr, port):
-                    self.state = 'waitRemoteconn'
-                    logging.info('state: waitRemoteconn')
+                    self.state = 'waitRemoteConnection'
+                    logging.info('state: waitRemoteConnection')
                     self.connectRemote(addr, port)
                     logging.info('connecting %s:%d', addr, port)
 
@@ -126,12 +140,12 @@ class socks5_protocol(protocol.Protocol):
 
                 def resolve_err(res):
                     logging.error('name resolve err: %s', res)
-                    self.sendConresp(5)
+                    self.sendConnectReply(5)
                     self.transport.loseConnection()
 
                 d.addErrback(resolve_err)
                 self.state = 'waitNameRes'
-                logging.info('state: waitNameres')
+                logging.info('state: waitNameResolve')
                 return
             else:
                 logging.error('type %d', atyp)
@@ -141,25 +155,31 @@ class socks5_protocol(protocol.Protocol):
             logging.error('command %d not supported', cmd)
             self.transport.loseConnection()
 
-    def waitNameres(self, data):
+    def waitNameResolve(self, data):
         logging.error('recv data when name resolving')
 
-    def waitRemoteconn(self, data):
+    def waitRemoteConnection(self, data):
         logging.error('recv data when connecting remote')
 
     def sendRemote(self, data):
+        assert self.remote_sock is not None
         self.remote_sock.transport.write(data)
 
-    def remoteConnectionmade(self, sock):
+    def remoteConnectionMade(self, sock):
         self.remote_sock = sock
-        self.sendConresp(0)
+        self.sendConnectReply(0)
         self.state = 'sendRemote'
         logging.info('state: sendRemote')
 
-    def sendConresp(self, code):
+    def sendHelloReply(self, code):
+        resp = struct.pack('!BB', 5, code)
+        self.transport.write(resp)
+
+    def sendConnectReply(self, code):
         try:
             addr = self.transport.getHost().host
         except:
+            logging.error('getHost error')
             self.transport.loseConnection()
             return
         ip = [int(i) for i in addr.split('.')]

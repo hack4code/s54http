@@ -30,7 +30,6 @@ def verify_proxy(conn, x509, errno, errdepth, ok):
 
 class sock_remote_protocol(protocol.Protocol):
     def connectionMade(self):
-        self.local_sock = self.factory.local_sock
         self.local_sock.remoteConnectionMade(self)
 
     def dataReceived(self, data):
@@ -41,6 +40,11 @@ class sock_remote_factory(protocol.ClientFactory):
     def __init__(self, sock):
         self.protocol = sock_remote_protocol
         self.local_sock = sock
+
+    def buildProtocol(self, addr):
+        p = protocol.ClientFactory.buildProtocol(self, addr)
+        p.local_sock = self.local_sock
+        return p
 
     def clientConnectionFailed(self, connector, reason):
         logging.error('connect to socks5 proxy server failed: %s',
@@ -64,35 +68,36 @@ class sock_local_factory(protocol.ServerFactory):
         p = protocol.ServerFactory.buildProtocol(self, addr)
         p.saddr, p.sport = self.saddr, self.sport
         p.ctx_factory = self.ctx_factory
-        p.connect_remote()
+        p.connectRemote()
         return p
 
 
 class sock_local_protocol(protocol.Protocol):
     def __init__(self):
-        self.state = 'wait_remote'
+        self.state = 'waitRemote'
         self.buf = b''
 
     def dataReceived(self, data):
         method = getattr(self, self.state)
         method(data)
 
-    def connect_remote(self):
+    def connectRemote(self):
         remote_factory = sock_remote_factory(self)
         reactor.connectSSL(self.saddr, self.sport,
                            remote_factory, self.ctx_factory)
 
-    def wait_remote(self, data):
-        # save data when not connected proxy server
+    def waitRemote(self, data):
+        # save data when proxy server not connected
         self.buf += data
 
-    def send_remote(self, data):
+    def sendRemote(self, data):
+        assert self.remote_sock is not None
         self.remote_sock.transport.write(data)
 
     def remoteConnectionMade(self, sock):
         self.remote_sock = sock
-        self.state = 'send_remote'
-        self.send_remote(self.buf)
+        self.state = 'sendRemote'
+        self.sendRemote(self.buf)
 
 
 def run_server(port, saddr, sport, ca, capath, key, cert):
