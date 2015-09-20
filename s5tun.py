@@ -7,11 +7,10 @@ import sys
 
 from utils import daemon, parse_args, write_pid_file, ssl_ctx_factory
 
-config = {'server': '139.162.24.240',
+config = {'server': '103.55.27.122',
           'sport': 6666,
           'port': 8080,
           'ca': 'keys/ca.crt',
-          'capath': 'keys/',
           'key': 'keys/s5tun.key',
           'cert': 'keys/s5tun.crt',
           'pid-file': 's5tun.pid',
@@ -58,10 +57,9 @@ class sock_remote_factory(protocol.ClientFactory):
 
 
 class sock_local_factory(protocol.ServerFactory):
-    def __init__(self, saddr, sport, ca, capath, key, cert):
+    def __init__(self, saddr, sport, ca, key, cert):
         self.saddr, self.sport = saddr, sport
-        self.ctx_factory = ssl_ctx_factory(True, ca, capath, key, cert,
-                                           verify_proxy)
+        self.ctx_factory = ssl_ctx_factory(True, ca, key, cert, verify_proxy)
         self.protocol = sock_local_protocol
 
     def buildProtocol(self, addr):
@@ -100,8 +98,8 @@ class sock_local_protocol(protocol.Protocol):
         self.sendRemote(self.buf)
 
 
-def run_server(port, saddr, sport, ca, capath, key, cert):
-    local_factory = sock_local_factory(saddr, sport, ca, capath, key, cert)
+def run_server(port, saddr, sport, ca, key, cert):
+    local_factory = sock_local_factory(saddr, sport, ca, key, cert)
     reactor.listenTCP(port, local_factory)
     reactor.run()
 
@@ -111,15 +109,14 @@ def main():
     log_file, log_level = config['log-file'], config['log-level']
     port = config['port']
     saddr, sport = config['server'], config['sport']
-    ca, capath = config['ca'], config['capath']
-    key, cert = config['key'], config['cert']
+    ca, key, cert = config['ca'], config['key'], config['cert']
     pid_file = config['pid-file']
     logging.basicConfig(filename=log_file, level=log_level,
                         format='%(asctime)s %(levelname)-8s %(message)s')
     if config['daemon']:
         daemon()
     write_pid_file(pid_file)
-    run_server(port, saddr, sport, ca, capath, key, cert)
+    run_server(port, saddr, sport, ca, key, cert)
 
 if __name__ == '__main__':
     main()
