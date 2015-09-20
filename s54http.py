@@ -11,7 +11,6 @@ from utils import daemon, write_pid_file, parse_args, \
 
 config = {'port': 6666,
           'ca': 'keys/ca.crt',
-          'capath': 'keys/',
           'key': 'keys/s54http.key',
           'cert': 'keys/s54http.crt',
           'pid-file': 's54http.pid',
@@ -219,14 +218,13 @@ def main():
     log_file, log_level = config['log-file'], config['log-level']
     pid_file = config['pid-file']
     port = config['port']
-    ca, capath = config['ca'], config['capath']
-    key, cert = config['key'], config['cert']
+    ca, key, cert = config['ca'], config['key'], config['cert']
     logging.basicConfig(filename=log_file, level=log_level,
                         format='%(asctime)s %(levelname)-8s %(message)s')
     if config['daemon']:
         daemon()
     write_pid_file(pid_file)
-    run_server(port, ca, capath, key, cert)
+    run_server(port, ca, key, cert)
 
 if __name__ == '__main__':
     main()

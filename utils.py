@@ -1,9 +1,9 @@
 import os
 import sys
-import logging
 import stat
 import fcntl
 import getopt
+import logging
 from collections import OrderedDict
 from OpenSSL import SSL as ssl
 
@@ -28,10 +28,9 @@ class ssl_ctx_factory:
     method = ssl.TLSv1_2_METHOD
     _ctx = None
 
-    def __init__(self, client, ca, capath, key, cert, verify):
+    def __init__(self, client, ca, key, cert, verify):
         self.isClient = client
         self._ca = ca
-        self._capath = capath
         self._key = key
         self._cert = cert
         self._verify = verify
@@ -44,7 +43,7 @@ class ssl_ctx_factory:
             ctx.use_certificate_file(self._cert)
             ctx.use_privatekey_file(self._key)
             ctx.check_privatekey()
-            ctx.load_verify_locations(self._ca, capath=self._capath)
+            ctx.load_verify_locations(self._ca)
             ctx.set_verify(ssl.VERIFY_PEER |
                            ssl.VERIFY_FAIL_IF_NO_PEER_CERT |
                            ssl.VERIFY_CLIENT_ONCE,
@@ -93,7 +92,7 @@ def write_pid_file(pid_file):
 
 
 def parse_args(args, config):
-    shortopts = 'dp:k:a:c:S:P:r:'
+    shortopts = 'dp:k:a:c:S:P:'
     longopts = ['pid-file=', 'log-file=', 'log-level=']
     optlist, _ = getopt.getopt(args, shortopts, longopts)
     try:
@@ -106,8 +105,6 @@ def parse_args(args, config):
                 config['cert'] = v
             elif k == '-a':
                 config['ca'] = v
-            elif k == '-r':
-                config['capath'] = v
             elif k == '-S':
                 config['server'] = v
             elif k == '-P':
