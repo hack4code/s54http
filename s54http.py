@@ -134,20 +134,20 @@ class socks5_protocol(protocol.Protocol):
                 self.buf = b''
 
                 if host in ncache:
-                    self.state = 'waitRemoteConnection'
-                    logging.info('state: waitRemoteConnection')
                     self.connectRemote(ncache[host], port)
                     logging.info('connect %s:%d', host, port)
+                    self.state = 'waitRemoteConnection'
+                    logging.info('state: waitRemoteConnection')
                     return
 
                 d = reactor.resolve(host)
 
                 def resolve_ok(addr, host, port):
-                    self.state = 'waitRemoteConnection'
-                    logging.info('state: waitRemoteConnection')
                     ncache[host] = addr
                     self.connectRemote(addr, port)
                     logging.info('connecting %s:%d', addr, port)
+                    self.state = 'waitRemoteConnection'
+                    logging.info('state: waitRemoteConnection')
 
                 d.addCallback(resolve_ok, host, port)
 
