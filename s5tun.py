@@ -7,7 +7,7 @@ import sys
 
 from utils import daemon, parse_args, write_pid_file, ssl_ctx_factory
 
-config = {'server': '139.162.10.135',
+config = {'server': '139.162.24.240',
           'sport': 6666,
           'port': 8080,
           'ca': 'keys/ca.crt',
