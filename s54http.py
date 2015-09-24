@@ -205,10 +205,10 @@ class socks5_protocol(protocol.Protocol):
         reactor.connectTCP(host, port, factory)
 
 
-def run_server(port, ca, capath, key, cert):
+def run_server(port, ca, key, cert):
     factory = protocol.ServerFactory()
     factory.protocol = socks5_protocol
-    ctx_factory = ssl_ctx_factory(False, ca, capath, key, cert, verify_tun)
+    ctx_factory = ssl_ctx_factory(False, ca, key, cert, verify_tun)
     reactor.listenSSL(port, factory, ctx_factory)
     reactor.run()
 
