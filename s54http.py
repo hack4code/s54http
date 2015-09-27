@@ -144,7 +144,7 @@ class socks5_protocol(protocol.Protocol):
                 def resolve_ok(addr, host, port):
                     ncache[host] = addr
                     self.connectRemote(addr, port)
-                    logging.info('connecting %s:%d', addr, port)
+                    logging.info('connecting %s:%d', host, port)
                     self.state = 'waitRemoteConnection'
                     logging.info('state: waitRemoteConnection')
 
