@@ -1,6 +1,11 @@
-run:
+s5tun:
 	bash -c "source env/bin/activate; \
 	./s5tun.py -d; \
+	deactivate"
+
+s54http:
+	bash -c "source env/bin/activate; \
+	./s54http.py -d; \
 	deactivate"
 
 keys:
