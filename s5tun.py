@@ -3,11 +3,12 @@
 
 from twisted.internet import reactor, protocol
 import logging
-import sys
 
 from utils import daemon, parse_args, write_pid_file, ssl_ctx_factory
 
-config = {'server': '',
+config = {'daemon': False,
+          'server': '',
+          # 'server': '',
           'sport': 6666,
           'port': 8080,
           'ca': 'keys/ca.crt',
@@ -15,7 +16,6 @@ config = {'server': '',
           'cert': 'keys/s5tun.crt',
           'pid-file': 's5tun.pid',
           'log-file': 's5tun.log',
-          'daemon': False,
           'log-level': logging.DEBUG}
 
 
@@ -105,7 +105,7 @@ def run_server(port, saddr, sport, ca, key, cert):
 
 
 def main():
-    parse_args(sys.argv[1:], config)
+    parse_args(config)
     log_file, log_level = config['log-file'], config['log-level']
     port = config['port']
     saddr, sport = config['server'], config['sport']
