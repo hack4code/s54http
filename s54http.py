@@ -4,7 +4,6 @@
 from twisted.internet import reactor, protocol
 import struct
 import logging
-import sys
 
 from utils import daemon, write_pid_file, parse_args, \
     ssl_ctx_factory, dns_cache
@@ -214,7 +213,7 @@ def run_server(port, ca, key, cert):
 
 
 def main():
-    parse_args(sys.argv[1:], config)
+    parse_args(config)
     log_file, log_level = config['log-file'], config['log-level']
     pid_file = config['pid-file']
     port = config['port']
