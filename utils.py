@@ -1,9 +1,7 @@
 import os
 import sys
-import stat
-import fcntl
-import getopt
 import logging
+from optparse import OptionParser
 from collections import OrderedDict
 from OpenSSL import SSL as ssl
 
@@ -71,53 +69,57 @@ def daemon():
 
 def write_pid_file(pid_file):
     pid = os.getpid()
-    try:
-        fd = os.open(pid_file, os.O_RDWR | os.O_CREAT,
-                     stat.S_IRUSR | stat.S_IWUSR)
-    except:
-        logging.error('open pid-file %s failed', pid_file)
-        sys.exit(-1)
-    flags = fcntl.fcntl(fd, fcntl.F_GETFD)
-    flags |= fcntl.FD_CLOEXEC
-    fcntl.fcntl(fd, fcntl.F_SETFD, flags)
-    try:
-        fcntl.lockf(fd, fcntl.LOCK_EX | fcntl.LOCK_NB, 0, 0, os.SEEK_SET)
-    except IOError:
-        old_pid = os.read(fd, 32)
-        logging.error('already started at pid %d', old_pid)
-        os.close(fd)
-        sys.exit(-1)
-    os.ftruncate(fd, 0)
-    os.write(fd, str(pid).encode('utf8'))
+    with open(pid_file, 'w') as fd:
+        fd.write(str(pid))
 
 
-def parse_args(args, config):
-    shortopts = 'dp:k:a:c:S:P:'
-    longopts = ['pid-file=', 'log-file=', 'log-level=']
-    optlist, _ = getopt.getopt(args, shortopts, longopts)
-    try:
-        for k, v in optlist:
-            if k == '-p':
-                config['port'] = int(v)
-            elif k == '-k':
-                config['key'] = v
-            elif k == '-c':
-                config['cert'] = v
-            elif k == '-a':
-                config['ca'] = v
-            elif k == '-S':
-                config['server'] = v
-            elif k == '-P':
-                config['sport'] = int(v)
-            elif k == '-d':
-                config['daemon'] = True
-            elif k == 'pid-file=':
-                config['pid-file'] = v
-            elif k == 'log-file=':
-                config['log-file'] = v
-            elif k == 'log-level=':
-                config['log-level'] = log_level[v]
-    except:
-        logging.error('parse option %s error', k)
+def parse_args(config):
+    usage = "usage: %s [options]" % (sys.argv[0])
+    parser = OptionParser(usage)
+    parser.add_option("-d", "--daemon", dest="daemon",
+                      action="store_true",
+                      help="run app at backgroud")
+    parser.add_option("-p", "--port", dest="port", type="int",
+                      help="listen port")
+    parser.add_option("-k", "--key", dest="key", type="string",
+                      help="key file path")
+    parser.add_option("-a", "--ca", dest="ca", type="string",
+                      help="ca file path")
+    parser.add_option("-c", "--cert", dest="cert", type="string",
+                      help="cert file path")
+    parser.add_option("-S", "--saddr", dest="saddr", type="string",
+                      help="remote porxy address")
+    parser.add_option("-P", "--sport", dest="sport", type="int",
+                      help="remote proxy port")
+    parser.add_option("-f", "--pidfile", dest="pidfile", type="string",
+                      help="pid file path")
+    parser.add_option("-l", "--logfile", dest="logfile", type="string",
+                      help="log file path")
+    parser.add_option("-e", "--loglevel", dest="loglevel", type="string",
+                      help="log level [info, warn, error]")
+
+    (options, args) = parser.parse_args()
+
+    if options.port:
+        config['port'] = options.port
+    if options.key:
+        config['key'] = options.key
+    if options.cert:
+        config['cert'] = options.cert
+    if options.ca:
+        config['ca'] = options.ca
+    if options.saddr:
+        config['server'] = options.saddr
+    if options.sport:
+        config['sport'] = options.sport
+    if options.daemon:
+        config['daemon'] = True
+    if options.pidfile:
+        config['pid-file'] = options.pidfile
+    if options.logfile:
+        config['log-file'] = options.logfile
+    if options.loglevel:
+        config['log-level'] = log_level[options.loglevel]
+
     if not config['daemon']:
         config['log-file'] = ''
