@@ -72,6 +72,12 @@ def write_pid_file(pid_file):
         fd.write(str(pid))
 
 
+def check(config):
+    if config['saddr'] == '':
+        logging.error("socks5 proxy address is null")
+        sys.exit(-1)
+
+
 def parse_args(config):
     usage = "usage: %s [options]" % (sys.argv[0])
     parser = OptionParser(usage)
@@ -108,7 +114,7 @@ def parse_args(config):
     if options.ca:
         config['ca'] = options.ca
     if options.saddr:
-        config['server'] = options.saddr
+        config['saddr'] = options.saddr
     if options.sport:
         config['sport'] = options.sport
     if options.daemon:
@@ -122,3 +128,4 @@ def parse_args(config):
 
     if not config['daemon']:
         config['logfile'] = ''
+    check(config)

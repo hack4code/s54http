@@ -7,7 +7,7 @@ import logging
 from utils import daemon, parse_args, write_pid_file, ssl_ctx_factory
 
 config = {'daemon': False,
-          'server': '',
+          'saddr': '',
           'sport': 6666,
           'port': 8080,
           'ca': 'keys/ca.crt',
@@ -108,7 +108,7 @@ def main():
     parse_args(config)
     log_file, log_level = config['logfile'], config['loglevel']
     port = config['port']
-    saddr, sport = config['server'], config['sport']
+    saddr, sport = config['saddr'], config['sport']
     ca, key, cert = config['ca'], config['key'], config['cert']
     pid_file = config['pidfile']
     logging.basicConfig(filename=log_file, level=log_level,
