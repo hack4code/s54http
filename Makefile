@@ -15,6 +15,6 @@ keys:
 	cp easy-rsa/keys/ca.crt easy-rsa/keys/s54http.{crt,key} easy-rsa/keys/s5tun.{crt,key} keys/
 
 clean:
-	rm -f *.log *.pid
+	rm -f *.log *.pid __pycache__/*
 
-.PHONY: keys clean run
+.PHONY: keys clean s5tun s54http
