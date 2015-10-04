@@ -22,7 +22,6 @@ class dns_cache(OrderedDict):
 
 
 class ssl_ctx_factory:
-    isClient = True
     method = ssl.TLSv1_2_METHOD
     _ctx = None
 
@@ -115,11 +114,11 @@ def parse_args(config):
     if options.daemon:
         config['daemon'] = True
     if options.pidfile:
-        config['pid-file'] = options.pidfile
+        config['pidfile'] = options.pidfile
     if options.logfile:
-        config['log-file'] = options.logfile
+        config['logfile'] = options.logfile
     if options.loglevel:
-        config['log-level'] = log_level[options.loglevel]
+        config['loglevel'] = log_level[options.loglevel]
 
     if not config['daemon']:
-        config['log-file'] = ''
+        config['logfile'] = ''

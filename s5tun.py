@@ -8,15 +8,14 @@ from utils import daemon, parse_args, write_pid_file, ssl_ctx_factory
 
 config = {'daemon': False,
           'server': '',
-          # 'server': '',
           'sport': 6666,
           'port': 8080,
           'ca': 'keys/ca.crt',
           'key': 'keys/s5tun.key',
           'cert': 'keys/s5tun.crt',
-          'pid-file': 's5tun.pid',
-          'log-file': 's5tun.log',
-          'log-level': logging.DEBUG}
+          'pidfile': 's5tun.pid',
+          'logfile': 's5tun.log',
+          'loglevel': logging.DEBUG}
 
 
 def verify_proxy(conn, x509, errno, errdepth, ok):
@@ -57,15 +56,15 @@ class sock_remote_factory(protocol.ClientFactory):
 
 
 class sock_local_factory(protocol.ServerFactory):
-    def __init__(self, saddr, sport, ca, key, cert):
+    def __init__(self, saddr, sport, ssl_ctx):
         self.saddr, self.sport = saddr, sport
-        self.ctx_factory = ssl_ctx_factory(True, ca, key, cert, verify_proxy)
+        self.ssl_ctx = ssl_ctx
         self.protocol = sock_local_protocol
 
     def buildProtocol(self, addr):
         p = protocol.ServerFactory.buildProtocol(self, addr)
         p.saddr, p.sport = self.saddr, self.sport
-        p.ctx_factory = self.ctx_factory
+        p.ssl_ctx = self.ssl_ctx
         p.connectRemote()
         return p
 
@@ -82,7 +81,7 @@ class sock_local_protocol(protocol.Protocol):
     def connectRemote(self):
         remote_factory = sock_remote_factory(self)
         reactor.connectSSL(self.saddr, self.sport,
-                           remote_factory, self.ctx_factory)
+                           remote_factory, self.ssl_ctx)
 
     def waitRemote(self, data):
         # save data when proxy server not connected
@@ -99,18 +98,19 @@ class sock_local_protocol(protocol.Protocol):
 
 
 def run_server(port, saddr, sport, ca, key, cert):
-    local_factory = sock_local_factory(saddr, sport, ca, key, cert)
+    ssl_ctx = ssl_ctx_factory(True, ca, key, cert, verify_proxy)
+    local_factory = sock_local_factory(saddr, sport, ssl_ctx)
     reactor.listenTCP(port, local_factory)
     reactor.run()
 
 
 def main():
     parse_args(config)
-    log_file, log_level = config['log-file'], config['log-level']
+    log_file, log_level = config['logfile'], config['loglevel']
     port = config['port']
     saddr, sport = config['server'], config['sport']
     ca, key, cert = config['ca'], config['key'], config['cert']
-    pid_file = config['pid-file']
+    pid_file = config['pidfile']
     logging.basicConfig(filename=log_file, level=log_level,
                         format='%(asctime)s %(levelname)-8s %(message)s')
     if config['daemon']:

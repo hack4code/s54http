@@ -8,14 +8,14 @@ import logging
 from utils import daemon, write_pid_file, parse_args, \
     ssl_ctx_factory, dns_cache
 
-config = {'port': 6666,
+config = {'daemon': False,
+          'port': 6666,
           'ca': 'keys/ca.crt',
           'key': 'keys/s54http.key',
           'cert': 'keys/s54http.crt',
-          'pid-file': 's54http.pid',
-          'log-file': 's54http.log',
-          'daemon': False,
-          'log-level': logging.DEBUG}
+          'pidfile': 's54http.pid',
+          'logfile': 's54http.log',
+          'loglevel': logging.DEBUG}
 
 
 def verify_tun(conn, x509, errno, errdepth, ok):
@@ -57,7 +57,7 @@ class remote_factory(protocol.ClientFactory):
         self.local_sock.transport.loseConnection()
 
 
-ncache = dns_cache(10000)
+ncache = dns_cache(1000)
 
 
 class socks5_protocol(protocol.Protocol):
@@ -207,15 +207,15 @@ class socks5_protocol(protocol.Protocol):
 def run_server(port, ca, key, cert):
     factory = protocol.ServerFactory()
     factory.protocol = socks5_protocol
-    ctx_factory = ssl_ctx_factory(False, ca, key, cert, verify_tun)
-    reactor.listenSSL(port, factory, ctx_factory)
+    ssl_ctx = ssl_ctx_factory(False, ca, key, cert, verify_tun)
+    reactor.listenSSL(port, factory, ssl_ctx)
     reactor.run()
 
 
 def main():
     parse_args(config)
-    log_file, log_level = config['log-file'], config['log-level']
-    pid_file = config['pid-file']
+    log_file, log_level = config['logfile'], config['loglevel']
+    pid_file = config['pidfile']
     port = config['port']
     ca, key, cert = config['ca'], config['key'], config['cert']
     logging.basicConfig(filename=log_file, level=log_level,
