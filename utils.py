@@ -72,7 +72,7 @@ def write_pid_file(pid_file):
         fd.write(str(pid))
 
 
-def check(config):
+def check_s5tun_config(config):
     if config['saddr'] == '':
         logging.error("socks5 proxy address is null")
         sys.exit(-1)
@@ -128,4 +128,3 @@ def parse_args(config):
 
     if not config['daemon']:
         config['logfile'] = ''
-    check(config)

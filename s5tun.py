@@ -4,7 +4,8 @@
 from twisted.internet import reactor, protocol
 import logging
 
-from utils import daemon, parse_args, write_pid_file, ssl_ctx_factory
+from utils import daemon, parse_args, write_pid_file, ssl_ctx_factory, \
+    check_s5tun_config
 
 config = {'daemon': False,
           'saddr': '',
@@ -106,6 +107,7 @@ def run_server(port, saddr, sport, ca, key, cert):
 
 def main():
     parse_args(config)
+    check_s5tun_config(config)
     log_file, log_level = config['logfile'], config['loglevel']
     port = config['port']
     saddr, sport = config['saddr'], config['sport']
