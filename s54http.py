@@ -103,7 +103,7 @@ class socks5_protocol(protocol.Protocol):
 
     def waitConnectRemote(self, data):
         self.buf += data
-        if (len(self.buf) < 4):
+        if len(self.buf) < 4:
             return
         (ver, cmd, rsv, atyp) = struct.unpack('!BBBB', data[:4])
         if ver != 5 or rsv != 0:
@@ -124,7 +124,7 @@ class socks5_protocol(protocol.Protocol):
                 logger.info('connect %s:%d', host, port)
                 return
             elif atyp == 3:  # name
-                if (len(self.buf) < 5):
+                if len(self.buf) < 5:
                     return
                 (nlen, ) = struct.unpack('!B', self.buf[4:5])
                 if (len(self.buf) < (5 + nlen + 2)):
