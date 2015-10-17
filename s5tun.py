@@ -109,15 +109,15 @@ def run_server(port, saddr, sport, ca, key, cert):
 
 def main():
     parse_args(config)
+    set_logger(config, logger)
     check_s5tun_config(config)
+    pid_file = config['pidfile']
+    mk_pid_file(pid_file)
+    if config['daemon']:
+        daemon()
     port = config['port']
     saddr, sport = config['saddr'], config['sport']
     ca, key, cert = config['ca'], config['key'], config['cert']
-    pid_file = config['pidfile']
-    mk_pid_file(pid_file)
-    set_logger(config, logger)
-    if config['daemon']:
-        daemon()
     run_server(port, saddr, sport, ca, key, cert)
 
 if __name__ == '__main__':
