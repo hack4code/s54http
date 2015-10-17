@@ -18,12 +18,14 @@ config = {'daemon': False,
           'logfile': 's5tun.log',
           'loglevel': logging.DEBUG}
 
+logger = logging.getLogger(__name__)
+
 
 def verify_proxy(conn, x509, errno, errdepth, ok):
     if not ok:
         cn = x509.get_subject().commonName
-        logging.error('socks5 proxy server verify failed: errno=%d cn=%s',
-                      errno, cn)
+        logger.error('socks5 proxy server verify failed: errno=%d cn=%s',
+                     errno, cn)
     return ok
 
 
@@ -46,13 +48,13 @@ class sock_remote_factory(protocol.ClientFactory):
         return p
 
     def clientConnectionFailed(self, connector, reason):
-        logging.error('connect to socks5 proxy server failed: %s',
-                      reason.getErrorMessage())
+        logger.error('connect to socks5 proxy server failed: %s',
+                     reason.getErrorMessage())
         self.local_sock.transport.loseConnection()
 
     def clientConnectionLost(self, connector, reason):
-        logging.info('connetion to socks5 proxy server closed: %s',
-                     reason.getErrorMessage())
+        logger.info('connetion to socks5 proxy server closed: %s',
+                    reason.getErrorMessage())
         self.local_sock.transport.loseConnection()
 
 
