@@ -66,10 +66,24 @@ def daemon():
     sys.stdin.close()
 
 
-def write_pid_file(pid_file):
+def mk_pid_file(pid_file):
     pid = os.getpid()
     with open(pid_file, 'w') as fd:
         fd.write(str(pid))
+
+
+def set_logger(config, logger):
+    log_file, log_level = config['logfile'], config['loglevel']
+    log_formatter = logging.Formatter(
+        '%(asctime)s-%(levelname)s : %(message)s', '%Y-%m-%d %H:%M:%S')
+    if config['daemon']:
+        hdr = logging.FileHandler(log_file)
+    else:
+        hdr = logging.StreamHandler(sys.stdout)
+        log_level = logging.DEBUG
+    hdr.setFormatter(log_formatter)
+    logger.setLevel(log_level)
+    logger.addHandler(hdr)
 
 
 def check_s5tun_config(config):

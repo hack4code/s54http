@@ -1,11 +1,11 @@
 #! /bin/env python
 
 
-from twisted.internet import reactor, protocol
 import logging
+from twisted.internet import reactor, protocol
 
-from utils import daemon, parse_args, write_pid_file, ssl_ctx_factory, \
-    check_s5tun_config
+from utils import daemon, parse_args, mk_pid_file, ssl_ctx_factory, \
+    check_s5tun_config, set_logger
 
 config = {'daemon': False,
           'saddr': '',
@@ -110,16 +110,14 @@ def run_server(port, saddr, sport, ca, key, cert):
 def main():
     parse_args(config)
     check_s5tun_config(config)
-    log_file, log_level = config['logfile'], config['loglevel']
     port = config['port']
     saddr, sport = config['saddr'], config['sport']
     ca, key, cert = config['ca'], config['key'], config['cert']
     pid_file = config['pidfile']
-    logging.basicConfig(filename=log_file, level=log_level,
-                        format='%(asctime)s %(levelname)-8s %(message)s')
+    mk_pid_file(pid_file)
+    set_logger(config, logger)
     if config['daemon']:
         daemon()
-    write_pid_file(pid_file)
     run_server(port, saddr, sport, ca, key, cert)
 
 if __name__ == '__main__':
