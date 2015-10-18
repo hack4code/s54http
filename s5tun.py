@@ -111,10 +111,10 @@ def main():
     parse_args(config)
     set_logger(config, logger)
     check_s5tun_config(config)
-    pid_file = config['pidfile']
-    mk_pid_file(pid_file)
     if config['daemon']:
         daemon()
+    pid_file = config['pidfile']
+    mk_pid_file(pid_file)
     port = config['port']
     saddr, sport = config['saddr'], config['sport']
     ca, key, cert = config['ca'], config['key'], config['cert']
