@@ -139,6 +139,3 @@ def parse_args(config):
         config['logfile'] = options.logfile
     if options.loglevel:
         config['loglevel'] = log_level[options.loglevel]
-
-    if not config['daemon']:
-        config['logfile'] = ''
