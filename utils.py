@@ -68,8 +68,8 @@ def daemon():
 
 def mk_pid_file(pid_file):
     pid = os.getpid()
-    with open(pid_file, 'w') as fd:
-        fd.write(str(pid))
+    with open(pid_file, 'w') as f:
+        f.write(str(pid))
 
 
 def set_logger(config, logger):
@@ -118,24 +118,10 @@ def parse_args(config):
                       help="log level [info, warn, error]")
 
     (options, args) = parser.parse_args()
-
-    if options.port:
-        config['port'] = options.port
-    if options.key:
-        config['key'] = options.key
-    if options.cert:
-        config['cert'] = options.cert
-    if options.ca:
-        config['ca'] = options.ca
-    if options.saddr:
-        config['saddr'] = options.saddr
-    if options.sport:
-        config['sport'] = options.sport
-    if options.daemon:
-        config['daemon'] = True
-    if options.pidfile:
-        config['pidfile'] = options.pidfile
-    if options.logfile:
-        config['logfile'] = options.logfile
-    if options.loglevel:
-        config['loglevel'] = log_level[options.loglevel]
+    for k in config.keys():
+        v = getattr(options, k, None)
+        if v is not None:
+            if k == 'loglevel':
+                config[k] = log_level(v)
+            else:
+                config[k] = v

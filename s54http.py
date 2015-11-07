@@ -175,7 +175,6 @@ class socks5_protocol(protocol.Protocol):
         logger.error('recv data when connecting remote')
 
     def sendRemote(self, data):
-        assert self.remote_sock is not None
         self.remote_sock.transport.write(data)
 
     def remoteConnectionMade(self, sock):
