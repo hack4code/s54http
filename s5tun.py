@@ -87,17 +87,14 @@ class sock_local_protocol(protocol.Protocol):
                            remote_factory, self.ssl_ctx)
 
     def waitRemote(self, data):
-        # save data when proxy server not connected
-        self.buf += data
+        pass
 
     def sendRemote(self, data):
-        assert self.remote_sock is not None
         self.remote_sock.transport.write(data)
 
     def remoteConnectionMade(self, sock):
         self.remote_sock = sock
         self.state = 'sendRemote'
-        self.sendRemote(self.buf)
 
 
 def run_server(port, saddr, sport, ca, key, cert):
