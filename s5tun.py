@@ -87,7 +87,7 @@ class sock_local_protocol(protocol.Protocol):
                            remote_factory, self.ssl_ctx)
 
     def waitRemote(self, data):
-        pass
+        self.buf += data
 
     def sendRemote(self, data):
         self.remote_sock.transport.write(data)
@@ -95,6 +95,8 @@ class sock_local_protocol(protocol.Protocol):
     def remoteConnectionMade(self, sock):
         self.remote_sock = sock
         self.state = 'sendRemote'
+        self.sendRemote(self.buf)
+        self.buf = None
 
 
 def run_server(port, saddr, sport, ca, key, cert):
