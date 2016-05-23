@@ -5,9 +5,12 @@ from optparse import OptionParser
 from collections import OrderedDict
 from OpenSSL import SSL as ssl
 
-log_level = {'debug': logging.DEBUG,
-             'info': logging.INFO,
-             'error': logging.ERROR}
+
+def get_loglevel(level):
+    log_level = {'debug': logging.DEBUG,
+                 'info': logging.INFO,
+                 'error': logging.ERROR}
+    return log_level(level)
 
 
 class dns_cache(OrderedDict):
@@ -73,7 +76,7 @@ def mk_pid_file(pid_file):
 
 
 def set_logger(config, logger):
-    log_file, log_level = config['logfile'], config['loglevel']
+    log_file, log_level = config['logfile'], get_loglevel(config['loglevel'])
     log_formatter = logging.Formatter(
         '%(asctime)s-%(levelname)s : %(message)s', '%Y-%m-%d %H:%M:%S')
     if config['daemon']:
@@ -121,7 +124,4 @@ def parse_args(config):
     for k in config.keys():
         v = getattr(options, k, None)
         if v is not None:
-            if k == 'loglevel':
-                config[k] = log_level(v)
-            else:
-                config[k] = v
+            config[k] = v

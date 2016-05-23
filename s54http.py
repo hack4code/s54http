@@ -28,7 +28,6 @@ def verify_tun(conn, x509, errno, errdepth, ok):
 
 
 class remote_protocol(protocol.Protocol):
-
     def connectionMade(self):
         self.local_sock.remoteConnectionMade(self)
 
@@ -63,7 +62,6 @@ ncache = dns_cache(1000)
 
 
 class socks5_protocol(protocol.Protocol):
-
     def connectionMade(self):
         self.state = 'waitHello'
         self.buf = b''
