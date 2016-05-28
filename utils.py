@@ -10,7 +10,13 @@ def get_loglevel(level):
     log_level = {'debug': logging.DEBUG,
                  'info': logging.INFO,
                  'error': logging.ERROR}
-    return log_level(level)
+    if type(level) == 'str':
+        if level in log_level:
+            return log_level[level]
+        else:
+            return logging.INFO
+    else:
+        return level
 
 
 class dns_cache(OrderedDict):
