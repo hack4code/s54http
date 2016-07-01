@@ -1,11 +1,14 @@
-socks5 proxy
+# Socks5 Proxy
 
-[usage]
-server:
+# Run
+
+##  Server
 s54http.py -d -k keyfile -c certfile -a cafile
 
-client with s5tun.py:
+## Client
+
+### s5tun.py
 s5tun.py -d -k keyfile -c certfile -a ca file
 
-client with socat:
+### socat
 socat tcp4-listen:xxxx,fork openssl:x.x.x.x:xxxx,cafile=,capath=,key=,cipher=AES256-GCM-SHA384
