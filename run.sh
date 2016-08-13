@@ -1,7 +1,7 @@
 #! /bin/bash
 
 id socks5 &>/dev/null || {
-	pip install --proxy http://103.55.27.122:8888 -r requirements.txt;
+	pip install -r requirements.txt;
 	adduser --disabled-password --gecos '' socks5;
 }
 
