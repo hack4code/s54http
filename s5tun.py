@@ -99,7 +99,10 @@ class sock_local_protocol(protocol.Protocol):
         self.buf = None
 
 
-def run_server(port, saddr, sport, ca, key, cert):
+def run_server(config):
+    port = config['port']
+    saddr, sport = config['saddr'], config['sport']
+    ca, key, cert = config['ca'], config['key'], config['cert']
     ssl_ctx = ssl_ctx_factory(True, ca, key, cert, verify_proxy)
     local_factory = sock_local_factory(saddr, sport, ssl_ctx)
     reactor.listenTCP(port, local_factory)
@@ -114,10 +117,7 @@ def main():
         daemon()
     pid_file = config['pidfile']
     mk_pid_file(pid_file)
-    port = config['port']
-    saddr, sport = config['saddr'], config['sport']
-    ca, key, cert = config['ca'], config['key'], config['cert']
-    run_server(port, saddr, sport, ca, key, cert)
+    run_server(config)
 
 if __name__ == '__main__':
     main()

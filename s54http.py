@@ -203,7 +203,9 @@ class socks5_protocol(protocol.Protocol):
         reactor.connectTCP(host, port, factory)
 
 
-def run_server(port, ca, key, cert):
+def run_server(config):
+    port = config['port']
+    ca, key, cert = config['ca'], config['key'], config['cert']
     factory = protocol.ServerFactory()
     factory.protocol = socks5_protocol
     ssl_ctx = ssl_ctx_factory(False, ca, key, cert, verify_tun)
@@ -218,9 +220,7 @@ def main():
         daemon()
     pid_file = config['pidfile']
     mk_pid_file(pid_file)
-    port = config['port']
-    ca, key, cert = config['ca'], config['key'], config['cert']
-    run_server(port, ca, key, cert)
+    run_server(config)
 
 if __name__ == '__main__':
     main()
