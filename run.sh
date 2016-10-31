@@ -6,4 +6,4 @@ id socks5 &>/dev/null || {
 }
 
 echo "running socks5 proxy......"
-su -m socks5 -c "python s5tun.py -S 103.55.27.122"
+su -m socks5 -c "python s5tun.py -S "
