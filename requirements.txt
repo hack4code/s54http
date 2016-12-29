@@ -1,14 +1,5 @@
-attrs
-cffi
-characteristic
 cryptography
-idna
-pyasn1
-pyasn1-modules
-pycparser
 pycrypto
 pyOpenSSL
 service-identity
-six
 Twisted
-zope.interface
