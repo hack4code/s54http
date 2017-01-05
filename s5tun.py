@@ -25,7 +25,8 @@ def verify_proxy(conn, x509, errno, errdepth, ok):
     if not ok:
         cn = x509.get_subject().commonName
         logger.error('socks5 proxy server verify failed: errno=%d cn=%s',
-                     errno, cn)
+                     errno,
+                     cn)
     return ok
 
 
@@ -43,7 +44,8 @@ class sock_remote_factory(protocol.ClientFactory):
         self.local_sock = sock
 
     def buildProtocol(self, addr):
-        p = protocol.ClientFactory.buildProtocol(self, addr)
+        p = protocol.ClientFactory.buildProtocol(self,
+                                                 addr)
         p.local_sock = self.local_sock
         return p
 
@@ -65,7 +67,8 @@ class sock_local_factory(protocol.ServerFactory):
         self.protocol = sock_local_protocol
 
     def buildProtocol(self, addr):
-        p = protocol.ServerFactory.buildProtocol(self, addr)
+        p = protocol.ServerFactory.buildProtocol(self,
+                                                 addr)
         p.saddr, p.sport = self.saddr, self.sport
         p.ssl_ctx = self.ssl_ctx
         p.connectRemote()
@@ -83,8 +86,10 @@ class sock_local_protocol(protocol.Protocol):
 
     def connectRemote(self):
         remote_factory = sock_remote_factory(self)
-        reactor.connectSSL(self.saddr, self.sport,
-                           remote_factory, self.ssl_ctx)
+        reactor.connectSSL(self.saddr,
+                           self.sport,
+                           remote_factory,
+                           self.ssl_ctx)
 
     def waitRemote(self, data):
         self.buf += data
@@ -103,15 +108,23 @@ def run_server(config):
     port = config['port']
     saddr, sport = config['saddr'], config['sport']
     ca, key, cert = config['ca'], config['key'], config['cert']
-    ssl_ctx = ssl_ctx_factory(True, ca, key, cert, verify_proxy)
-    local_factory = sock_local_factory(saddr, sport, ssl_ctx)
-    reactor.listenTCP(port, local_factory)
+    ssl_ctx = ssl_ctx_factory(True,
+                              ca,
+                              key,
+                              cert,
+                              verify_proxy)
+    local_factory = sock_local_factory(saddr,
+                                       sport,
+                                       ssl_ctx)
+    reactor.listenTCP(port,
+                      local_factory)
     reactor.run()
 
 
 def main():
     parse_args(config)
-    set_logger(config, logger)
+    set_logger(config,
+               logger)
     check_s5tun_config(config)
     if config['daemon']:
         daemon()
