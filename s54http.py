@@ -142,7 +142,7 @@ class socks5_protocol(protocol.Protocol):
                 d = self.R.lookupAddress(host)
 
                 def resolve_ok(records, host, port):
-                    answers, _ = records
+                    answers, *_ = records
                     for a in answers:
                         if a.type == dns.A:
                             addr = a.payload.dottedQuad()
