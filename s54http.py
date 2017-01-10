@@ -4,6 +4,7 @@
 import logging
 import struct
 from twisted.internet import reactor, protocol
+from twisted.names import client
 
 from utils import daemon, mk_pid_file, parse_args, \
     ssl_ctx_factory, dns_cache, set_logger
@@ -138,7 +139,10 @@ class socks5_protocol(protocol.Protocol):
                     logger.info('state: waitRemoteConnection')
                     return
 
-                d = reactor.resolve(host)
+                resolver = client.createResolver(
+                    servers=[('8.8.8.8', 53)],
+                    reactor=reactor)
+                d = resolver.lookupAddress(host)
 
                 def resolve_ok(addr, host, port):
                     ncache[host] = addr
