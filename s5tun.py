@@ -79,16 +79,23 @@ class sock_local_protocol(protocol.Protocol):
     def __init__(self):
         self.state = 'waitRemote'
         self.buf = b''
+        self.remote_factory = None
+
+    def connectionLost(self, reason=None):
+        logger.info('local connection closed')
+        if self.remote_factory:
+            logger.info('close remote_factory')
+            self.remote_factory.stopFactory()
 
     def dataReceived(self, data):
         method = getattr(self, self.state)
         method(data)
 
     def connectRemote(self):
-        remote_factory = sock_remote_factory(self)
+        self.remote_factory = sock_remote_factory(self)
         reactor.connectSSL(self.saddr,
                            self.sport,
-                           remote_factory,
+                           self.remote_factory,
                            self.ssl_ctx)
 
     def waitRemote(self, data):
