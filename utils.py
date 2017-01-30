@@ -1,22 +1,11 @@
 import os
 import sys
 import logging
-from optparse import OptionParser
 from collections import OrderedDict
+
+from optparse import OptionParser
+
 from OpenSSL import SSL as ssl
-
-
-def get_loglevel(level):
-    log_level = {'debug': logging.DEBUG,
-                 'info': logging.INFO,
-                 'error': logging.ERROR}
-    if type(level) == 'str':
-        if level in log_level:
-            return log_level[level]
-        else:
-            return logging.INFO
-    else:
-        return level
 
 
 class dns_cache(OrderedDict):
@@ -81,18 +70,18 @@ def mk_pid_file(pid_file):
         f.write(str(pid))
 
 
-def set_logger(config, logger):
-    log_file, log_level = config['logfile'], get_loglevel(config['loglevel'])
-    log_formatter = logging.Formatter(
-        '%(asctime)s-%(levelname)s : %(message)s', '%Y-%m-%d %H:%M:%S')
+def init_logger(config, logger):
+    name, level = config['logfile'], config['loglevel']
+    formatter = logging.Formatter(
+        '%(asctime)s-%(levelname)s : %(message)s',
+        '%Y-%m-%d %H:%M:%S')
     if config['daemon']:
-        hdr = logging.FileHandler(log_file)
+        handler = logging.FileHandler(name)
     else:
-        hdr = logging.StreamHandler(sys.stdout)
-        log_level = logging.DEBUG
-    hdr.setFormatter(log_formatter)
-    logger.setLevel(log_level)
-    logger.addHandler(hdr)
+        handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(formatter)
+    logger.setLevel(level)
+    logger.addHandler(handler)
 
 
 def check_s5tun_config(config):
@@ -116,7 +105,7 @@ def parse_args(config):
     parser.add_option("-c", "--cert", dest="cert", type="string",
                       help="cert file path")
     parser.add_option("-S", "--saddr", dest="saddr", type="string",
-                      help="remote porxy address")
+                      help="remote proxy address")
     parser.add_option("-P", "--sport", dest="sport", type="int",
                       help="remote proxy port")
     parser.add_option("-f", "--pidfile", dest="pidfile", type="string",
@@ -124,9 +113,9 @@ def parse_args(config):
     parser.add_option("-l", "--logfile", dest="logfile", type="string",
                       help="log file path")
     parser.add_option("-e", "--loglevel", dest="loglevel", type="string",
-                      help="log level [info, warn, error]")
+                      help="log level [INFO, WARN, ERROR]")
 
-    (options, args) = parser.parse_args()
+    options, args = parser.parse_args()
     for k in config.keys():
         v = getattr(options, k, None)
         if v is not None:

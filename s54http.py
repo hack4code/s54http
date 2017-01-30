@@ -3,11 +3,12 @@
 
 import logging
 import struct
+
 from twisted.internet import reactor, protocol
 from twisted.names import client, dns
 
 from utils import daemon, mk_pid_file, parse_args, \
-    ssl_ctx_factory, dns_cache, set_logger
+    ssl_ctx_factory, dns_cache, init_logger
 
 logger = logging.getLogger(__name__)
 
@@ -18,13 +19,13 @@ config = {'daemon': False,
           'cert': 'keys/s54http.crt',
           'pidfile': 's54http.pid',
           'logfile': 's54http.log',
-          'loglevel': logging.DEBUG}
+          'loglevel': 'INFO'}
 
 
 def verify_tun(conn, x509, errno, errdepth, ok):
     if not ok:
         cn = x509.get_subject().commonName
-        logger.error('client verify failed: errno=%d cn=%s',
+        logger.error('ssl verify failed: errno=%d cn=%s',
                      errno,
                      cn)
     return ok
@@ -82,8 +83,9 @@ class socks5_protocol(protocol.Protocol):
         if len(self.buf) < 2:
             return
         ver, nmethods = struct.unpack('!BB', self.buf[:2])
-        logger.info('version = %d, nmethods = %d' %
-                    (ver, nmethods))
+        logger.info('version=%d, nmethods=%d',
+                    ver,
+                    nmethods)
         if ver != 5:
             logger.error('socks %d not supported',
                          ver)
@@ -95,10 +97,10 @@ class socks5_protocol(protocol.Protocol):
             self.sendHelloReply(0xFF)
             self.transport.loseConnection()
             return
-        if len(self.buf) < (nmethods + 2):
+        if len(self.buf) < nmethods + 2:
             return
         for method in self.buf[2:2+nmethods]:
-            if method == 0:  # no authentication
+            if method == 0:
                 self.buf = b''
                 self.state = 'waitConnectRemote'
                 logger.info('state: waitConnectRemote')
@@ -111,8 +113,8 @@ class socks5_protocol(protocol.Protocol):
         self.buf += data
         if len(self.buf) < 4:
             return
-        (ver, cmd, rsv, atyp) = struct.unpack('!BBBB',
-                                              data[:4])
+        ver, cmd, rsv, atyp = struct.unpack('!BBBB',
+                                            data[:4])
         if ver != 5 or rsv != 0:
             logger.error('ver: %d rsv: %d',
                          ver,
@@ -120,14 +122,17 @@ class socks5_protocol(protocol.Protocol):
             self.transport.loseConnection()
             return
         if cmd == 1:
-            if atyp == 1:  # addr
-                if (len(self.buf) < 10):
+            if atyp == 1:
+                if len(self.buf) < 10:
                     return
-                (b1, b2, b3, b4) = struct.unpack('!BBBB',
-                                                 self.buf[4:8])
-                host = '%i.%i.%i.%i' % (b1, b2, b3, b4)
-                (port) = struct.unpack('!H',
-                                       self.buf[8:10])
+                b1, b2, b3, b4 = struct.unpack('!BBBB',
+                                               self.buf[4:8])
+                host = '{}.{}.{}.{}'.format(b1,
+                                            b2,
+                                            b3,
+                                            b4)
+                port, = struct.unpack('!H',
+                                      self.buf[8:10])
                 self.buf = b''
                 self.state = 'waitRemoteConnection'
                 logger.info('state: waitRemoteConnection')
@@ -137,16 +142,16 @@ class socks5_protocol(protocol.Protocol):
                             host,
                             port)
                 return
-            elif atyp == 3:  # name
+            elif atyp == 3:
                 if len(self.buf) < 5:
                     return
-                (nlen, ) = struct.unpack('!B',
-                                         self.buf[4:5])
-                if (len(self.buf) < (5 + nlen + 2)):
+                nlen, = struct.unpack('!B',
+                                      self.buf[4:5])
+                if len(self.buf) < 5 + nlen + 2:
                     return
                 host = self.buf[5:5+nlen].decode('utf-8')
-                (port, ) = struct.unpack('!H',
-                                         self.buf[5+nlen:7+nlen])
+                port, = struct.unpack('!H',
+                                      self.buf[5+nlen:7+nlen])
                 self.buf = b''
 
                 if host in ncache:
@@ -176,7 +181,7 @@ class socks5_protocol(protocol.Protocol):
                             logger.info('state: waitRemoteConnection')
                             break
                     else:
-                        logger.error('%s dns lookup got no ipv4 address',
+                        logger.error('%s dns failed',
                                      host)
                         self.sendConnectReply(5)
                         self.transport.loseConnection()
@@ -184,7 +189,7 @@ class socks5_protocol(protocol.Protocol):
                 d.addCallback(resolve_ok, host, port)
 
                 def resolve_err(res):
-                    logger.error('name resolve err: %s',
+                    logger.error('%s dns error',
                                  res)
                     self.sendConnectReply(5)
                     self.transport.loseConnection()
@@ -274,11 +279,11 @@ def run_server(config):
 
 def main():
     parse_args(config)
-    set_logger(config, logger)
+    init_logger(config,
+                logger)
     if config['daemon']:
         daemon()
-    pid_file = config['pidfile']
-    mk_pid_file(pid_file)
+    mk_pid_file(config['pidfile'])
     run_server(config)
 
 if __name__ == '__main__':

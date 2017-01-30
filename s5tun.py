@@ -5,7 +5,7 @@ import logging
 from twisted.internet import reactor, protocol
 
 from utils import daemon, parse_args, mk_pid_file, ssl_ctx_factory, \
-    check_s5tun_config, set_logger
+    check_s5tun_config, init_logger
 
 config = {'daemon': False,
           'saddr': '',
@@ -16,7 +16,7 @@ config = {'daemon': False,
           'cert': 'keys/s5tun.crt',
           'pidfile': 's5tun.pid',
           'logfile': 's5tun.log',
-          'loglevel': logging.DEBUG}
+          'loglevel': 'INFO'}
 
 logger = logging.getLogger(__name__)
 
@@ -117,19 +117,19 @@ def run_server(config):
                                        sport,
                                        ssl_ctx)
     reactor.listenTCP(port,
-                      local_factory)
+                      local_factory,
+                      interface='127.0.0.1')
     reactor.run()
 
 
 def main():
     parse_args(config)
-    set_logger(config,
-               logger)
+    init_logger(config,
+                logger)
     check_s5tun_config(config)
     if config['daemon']:
         daemon()
-    pid_file = config['pidfile']
-    mk_pid_file(pid_file)
+    mk_pid_file(config['pidfile'])
     run_server(config)
 
 if __name__ == '__main__':
