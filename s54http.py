@@ -263,7 +263,7 @@ class socks5_protocol(protocol.Protocol):
                                              host=host)
         reactor.connectTCP(host,
                            port,
-                           self.remote_protocol)
+                           self.remote_factory)
 
 
 def run_server(config):
