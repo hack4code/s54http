@@ -72,13 +72,13 @@ class socks5_protocol(protocol.Protocol):
     def connectionMade(self):
         self.state = 'waitHello'
         self.buf = b''
-        self.remote_factory = None
+        self.remote_sock = None
 
     def connectionLost(self, reason=None):
         logger.info('tunnel connetion closed')
-        if self.remote_factory:
+        if self.remote_sock is not None:
             logger.info('close remote connection')
-            self.remote_factory.stopFactory()
+            self.remote_sock.transport.loseConnection()
 
     def dataReceived(self, data):
         method = getattr(self,
@@ -259,11 +259,11 @@ class socks5_protocol(protocol.Protocol):
         self.transport.write(resp)
 
     def connectRemote(self, host, port):
-        self.remote_factory = remote_factory(self,
+        remote_factory = remote_factory(self,
                                              host=host)
         reactor.connectTCP(host,
                            port,
-                           self.remote_factory)
+                           remote_factory)
 
 
 def run_server(config):
