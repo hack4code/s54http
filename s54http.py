@@ -259,11 +259,11 @@ class socks5_protocol(protocol.Protocol):
         self.transport.write(resp)
 
     def connectRemote(self, host, port):
-        remote_factory = remote_factory(self,
-                                             host=host)
+        factory = remote_factory(self,
+                                 host=host)
         reactor.connectTCP(host,
                            port,
-                           remote_factory)
+                           factory)
 
 
 def run_server(config):
