@@ -12,9 +12,12 @@ from utils import daemon, mk_pid_file, parse_args, \
     ssl_ctx_factory, dns_cache, init_logger
 
 logger = logging.getLogger(__name__)
+
 _ip = re.compile(r'[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}')
-dns_server = client.createResolver(servers=[('8.8.8.8', 53),
-                                            ('172.23.0.53', 53)])
+dns_server = client.createResolver(servers=[('8.8.8.8', 53)])
+# dn42
+dns_server_dn42 = client.createResolver(servers=[('172.23.0.53', 53)])
+
 config = {'daemon': False,
           'port': 6666,
           'ca': 'keys/ca.crt',
@@ -159,7 +162,7 @@ class socks5_protocol(protocol.Protocol):
                                       self.buf[4:5])
                 if len(self.buf) < 5 + nlen + 2:
                     return
-                host = self.buf[5:5+nlen].decode('utf-8')
+                host = self.buf[5:5+nlen].decode('utf-8').strip()
                 port, = struct.unpack('!H',
                                       self.buf[5+nlen:7+nlen])
                 self.buf = b''
@@ -184,7 +187,10 @@ class socks5_protocol(protocol.Protocol):
                     logger.info('state: waitRemoteConnection')
                     return
 
-                d = dns_server.lookupAddress(host)
+                if host.endswith('.dn42'):
+                    d = dns_server_dn42.lookupAddress(host)
+                else:
+                    d = dns_server.lookupAddress(host)
 
                 def resolve_ok(records, host, port):
                     answers, *_ = records
