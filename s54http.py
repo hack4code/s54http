@@ -12,9 +12,9 @@ from utils import daemon, mk_pid_file, parse_args, \
     ssl_ctx_factory, dns_cache, init_logger
 
 logger = logging.getLogger(__name__)
-dns_server = client.createResolver(servers=[('8.8.8.8', 53)])
 _ip = re.compile(r'[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}')
-
+dns_server = client.createResolver(servers=[('8.8.8.8', 53),
+                                            ('172.23.0.53', 53)])
 config = {'daemon': False,
           'port': 6666,
           'ca': 'keys/ca.crt',
