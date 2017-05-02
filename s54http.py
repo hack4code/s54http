@@ -3,6 +3,7 @@
 
 import logging
 import struct
+import re
 
 from twisted.internet import reactor, protocol
 from twisted.names import client, dns
@@ -11,6 +12,8 @@ from utils import daemon, mk_pid_file, parse_args, \
     ssl_ctx_factory, dns_cache, init_logger
 
 logger = logging.getLogger(__name__)
+dns_server = client.createResolver(servers=[('8.8.8.8', 53)])
+_ip = re.compile(r'[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}')
 
 config = {'daemon': False,
           'port': 6666,
@@ -161,6 +164,16 @@ class socks5_protocol(protocol.Protocol):
                                       self.buf[5+nlen:7+nlen])
                 self.buf = b''
 
+                if _ip.match(host) is not None:
+                    self.state = 'waitRemoteConnection'
+                    logger.info('state: waitRemoteConnection')
+                    self.connectRemote(host,
+                                       port)
+                    logger.info('connect %s:%d',
+                                host,
+                                port)
+                    return
+
                 if host in ncache:
                     self.connectRemote(ncache[host],
                                        port)
@@ -171,7 +184,7 @@ class socks5_protocol(protocol.Protocol):
                     logger.info('state: waitRemoteConnection')
                     return
 
-                d = self.R.lookupAddress(host)
+                d = dns_server.lookupAddress(host)
 
                 def resolve_ok(records, host, port):
                     answers, *_ = records
@@ -270,8 +283,6 @@ def run_server(config):
     port = config['port']
     ca, key, cert = config['ca'], config['key'], config['cert']
     factory = protocol.ServerFactory()
-    socks5_protocol.R = client.createResolver(servers=[('8.8.8.8',
-                                                        53)])
     factory.protocol = socks5_protocol
     ssl_ctx = ssl_ctx_factory(False,
                               ca,
