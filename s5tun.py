@@ -12,11 +12,11 @@ from utils import (
 config = {
         'daemon': False,
         'saddr': '',
-        'sport': 6666,
+        'sport': 8080,
         'port': 8080,
         'ca': 'keys/ca.crt',
-        'key': 'keys/s5tun.key',
-        'cert': 'keys/s5tun.crt',
+        'key': 'keys/client.key',
+        'cert': 'keys/client.crt',
         'pidfile': 's5tun.pid',
         'logfile': 's5tun.log',
         'loglevel': 'INFO'
