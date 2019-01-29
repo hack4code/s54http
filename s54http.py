@@ -8,32 +8,36 @@ import re
 from twisted.internet import reactor, protocol
 from twisted.names import client, dns
 
-from utils import daemon, mk_pid_file, parse_args, \
-    ssl_ctx_factory, dns_cache, init_logger
+from utils import (
+        daemon, mk_pid_file, parse_args,
+        ssl_ctx_factory, dns_cache, init_logger
+)
+
 
 logger = logging.getLogger(__name__)
 
+
 _ip = re.compile(r'[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}')
 dns_server = client.createResolver(servers=[('8.8.8.8', 53)])
-# dn42
 dns_server_dn42 = client.createResolver(servers=[('172.23.0.53', 53)])
 
-config = {'daemon': False,
-          'port': 6666,
-          'ca': 'keys/ca.crt',
-          'key': 'keys/s54http.key',
-          'cert': 'keys/s54http.crt',
-          'pidfile': 's54http.pid',
-          'logfile': 's54http.log',
-          'loglevel': 'INFO'}
+
+config = {
+        'daemon': False,
+        'port': 6666,
+        'ca': 'keys/ca.crt',
+        'key': 'keys/s54http.key',
+        'cert': 'keys/s54http.crt',
+        'pidfile': 's54http.pid',
+        'logfile': 's54http.log',
+        'loglevel': 'INFO'
+}
 
 
 def verify_tun(conn, x509, errno, errdepth, ok):
     if not ok:
         cn = x509.get_subject().commonName
-        logger.error('ssl verify failed: errno=%d cn=%s',
-                     errno,
-                     cn)
+        logger.error('ssl verify failed: errno=%d cn=%s', errno, cn)
     return ok
 
 
@@ -52,22 +56,25 @@ class remote_factory(protocol.ClientFactory):
         self.remote_host = host
 
     def buildProtocol(self, addr):
-        p = protocol.ClientFactory.buildProtocol(self,
-                                                 addr)
+        p = protocol.ClientFactory.buildProtocol(self, addr)
         p.local_sock = self.local_sock
         return p
 
     def clientConnectionFailed(self, connector, reason):
-        logger.error('connect %s failed: %s',
-                     self.remote_host,
-                     reason.getErrorMessage())
+        logger.error(
+                'connect %s failed: %s',
+                self.remote_host,
+                reason.getErrorMessage()
+        )
         self.local_sock.sendConnectReply(5)
         self.local_sock.transport.loseConnection()
 
     def clientConnectionLost(self, connector, reason):
-        logger.info('connetion to %s closed: %s',
-                    self.remote_host,
-                    reason.getErrorMessage())
+        logger.info(
+                'connetion to %s closed: %s',
+                self.remote_host,
+                reason.getErrorMessage()
+        )
         self.local_sock.transport.loseConnection()
 
 
@@ -87,8 +94,7 @@ class socks5_protocol(protocol.Protocol):
             self.remote_sock.transport.loseConnection()
 
     def dataReceived(self, data):
-        method = getattr(self,
-                         self.state)
+        method = getattr(self, self.state)
         method(data)
 
     def waitHello(self, data):
@@ -96,12 +102,9 @@ class socks5_protocol(protocol.Protocol):
         if len(self.buf) < 2:
             return
         ver, nmethods = struct.unpack('!BB', self.buf[:2])
-        logger.info('version=%d, nmethods=%d',
-                    ver,
-                    nmethods)
+        logger.info('version=%d, nmethods=%d', ver, nmethods)
         if ver != 5:
-            logger.error('socks %d not supported',
-                         ver)
+            logger.error('socks %d not supported', ver)
             self.sendHelloReply(0xFF)
             self.transport.loseConnection()
             return
@@ -129,60 +132,45 @@ class socks5_protocol(protocol.Protocol):
         ver, cmd, rsv, atyp = struct.unpack('!BBBB',
                                             data[:4])
         if ver != 5 or rsv != 0:
-            logger.error('ver: %d rsv: %d',
-                         ver,
-                         rsv)
+            logger.error('ver: %d rsv: %d', ver, rsv)
             self.transport.loseConnection()
             return
         if cmd == 1:
             if atyp == 1:
                 if len(self.buf) < 10:
                     return
-                b1, b2, b3, b4 = struct.unpack('!BBBB',
-                                               self.buf[4:8])
+                b1, b2, b3, b4 = struct.unpack('!BBBB', self.buf[4:8])
                 host = '{}.{}.{}.{}'.format(b1,
                                             b2,
                                             b3,
                                             b4)
-                port, = struct.unpack('!H',
-                                      self.buf[8:10])
+                port, = struct.unpack('!H', self.buf[8:10])
                 self.buf = b''
                 self.state = 'waitRemoteConnection'
                 logger.info('state: waitRemoteConnection')
-                self.connectRemote(host,
-                                   port)
-                logger.info('connect %s:%d',
-                            host,
-                            port)
+                self.connectRemote(host, port)
+                logger.info('connect %s:%d', host, port)
                 return
             elif atyp == 3:
                 if len(self.buf) < 5:
                     return
-                nlen, = struct.unpack('!B',
-                                      self.buf[4:5])
+                nlen, = struct.unpack('!B', self.buf[4:5])
                 if len(self.buf) < 5 + nlen + 2:
                     return
                 host = self.buf[5:5+nlen].decode('utf-8').strip()
-                port, = struct.unpack('!H',
-                                      self.buf[5+nlen:7+nlen])
+                port, = struct.unpack('!H', self.buf[5+nlen:7+nlen])
                 self.buf = b''
 
                 if _ip.match(host) is not None:
                     self.state = 'waitRemoteConnection'
                     logger.info('state: waitRemoteConnection')
-                    self.connectRemote(host,
-                                       port)
-                    logger.info('connect %s:%d',
-                                host,
-                                port)
+                    self.connectRemote(host, port)
+                    logger.info('connect %s:%d', host, port)
                     return
 
                 if host in ncache:
-                    self.connectRemote(ncache[host],
-                                       port)
-                    logger.info('connect %s:%d',
-                                host,
-                                port)
+                    self.connectRemote(ncache[host], port)
+                    logger.info('connect %s:%d', host, port)
                     self.state = 'waitRemoteConnection'
                     logger.info('state: waitRemoteConnection')
                     return
@@ -198,25 +186,20 @@ class socks5_protocol(protocol.Protocol):
                         if a.type == dns.A:
                             addr = a.payload.dottedQuad()
                             ncache[host] = addr
-                            self.connectRemote(addr,
-                                               port)
-                            logger.info('connecting %s:%d',
-                                        host,
-                                        port)
+                            self.connectRemote(addr, port)
+                            logger.info('connecting %s:%d', host, port)
                             self.state = 'waitRemoteConnection'
                             logger.info('state: waitRemoteConnection')
                             break
                     else:
-                        logger.error('%s dns failed',
-                                     host)
+                        logger.error('%s dns failed', host)
                         self.sendConnectReply(5)
                         self.transport.loseConnection()
 
                 d.addCallback(resolve_ok, host, port)
 
                 def resolve_err(res):
-                    logger.error('%s dns error',
-                                 res)
+                    logger.error('%s dns error', res)
                     self.sendConnectReply(5)
                     self.transport.loseConnection()
 
@@ -225,13 +208,11 @@ class socks5_protocol(protocol.Protocol):
                 logger.info('state: waitNameResolve')
                 return
             else:
-                logger.error('type %d',
-                             atyp)
+                logger.error('type %d', atyp)
                 self.transport.loseConnection()
                 return
         else:
-            logger.error('command %d not supported',
-                         cmd)
+            logger.error('command %d not supported', cmd)
             self.transport.loseConnection()
 
     def waitNameResolve(self, data):
@@ -250,65 +231,51 @@ class socks5_protocol(protocol.Protocol):
         logger.info('state: sendRemote')
 
     def sendHelloReply(self, code):
-        resp = struct.pack('!BB',
-                           5,
-                           code)
+        resp = struct.pack('!BB', 5, code)
         self.transport.write(resp)
 
     def sendConnectReply(self, code):
         try:
             addr = self.transport.getHost().host
-        except:
+        except Exception:
             logger.error('getHost error')
             self.transport.loseConnection()
             return
         ip = [int(i) for i in addr.split('.')]
-        resp = struct.pack('!BBBB',
-                           5,
-                           code,
-                           0,
-                           1)
-        resp += struct.pack('!BBBB',
-                            ip[0],
-                            ip[1],
-                            ip[2],
-                            ip[3])
-        resp += struct.pack('!H',
-                            self.transport.getHost().port)
+        resp = struct.pack('!BBBB', 5, code, 0, 1)
+        resp += struct.pack('!BBBB', ip[0], ip[1], ip[2], ip[3])
+        resp += struct.pack('!H', self.transport.getHost().port)
         self.transport.write(resp)
 
     def connectRemote(self, host, port):
-        factory = remote_factory(self,
-                                 host=host)
-        reactor.connectTCP(host,
-                           port,
-                           factory)
+        factory = remote_factory(self, host=host)
+        reactor.connectTCP(host, port, factory)
 
 
-def run_server(config):
+def start_server(config):
     port = config['port']
     ca, key, cert = config['ca'], config['key'], config['cert']
     factory = protocol.ServerFactory()
     factory.protocol = socks5_protocol
-    ssl_ctx = ssl_ctx_factory(False,
-                              ca,
-                              key,
-                              cert,
-                              verify_tun)
-    reactor.listenSSL(port,
-                      factory,
-                      ssl_ctx)
+    ssl_ctx = ssl_ctx_factory(
+            False,
+            ca,
+            key,
+            cert,
+            verify_tun
+    )
+    reactor.listenSSL(port, factory, ssl_ctx)
     reactor.run()
 
 
 def main():
     parse_args(config)
-    init_logger(config,
-                logger)
+    init_logger(config, logger)
     if config['daemon']:
         daemon()
     mk_pid_file(config['pidfile'])
-    run_server(config)
+    start_server(config)
+
 
 if __name__ == '__main__':
     main()
