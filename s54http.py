@@ -9,8 +9,9 @@ from twisted.internet import reactor, protocol
 from twisted.names import client, dns
 
 from utils import (
-        daemon, mk_pid_file, parse_args,
-        ssl_ctx_factory, dns_cache, init_logger
+        daemon,  parse_args,
+        ssl_ctx_factory, dns_cache, init_logger,
+        # mk_pid_file
 )
 
 
@@ -19,15 +20,14 @@ logger = logging.getLogger(__name__)
 
 _ip = re.compile(r'[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}')
 dns_server = client.createResolver(servers=[('8.8.8.8', 53)])
-dns_server_dn42 = client.createResolver(servers=[('172.23.0.53', 53)])
 
 
 config = {
         'daemon': False,
         'port': 6666,
         'ca': 'keys/ca.crt',
-        'key': 'keys/s54http.key',
-        'cert': 'keys/s54http.crt',
+        'key': 'keys/server.key',
+        'cert': 'keys/server.crt',
         'pidfile': 's54http.pid',
         'logfile': 's54http.log',
         'loglevel': 'INFO'
@@ -175,10 +175,7 @@ class socks5_protocol(protocol.Protocol):
                     logger.info('state: waitRemoteConnection')
                     return
 
-                if host.endswith('.dn42'):
-                    d = dns_server_dn42.lookupAddress(host)
-                else:
-                    d = dns_server.lookupAddress(host)
+                d = dns_server.lookupAddress(host)
 
                 def resolve_ok(records, host, port):
                     answers, *_ = records
@@ -273,7 +270,7 @@ def main():
     init_logger(config, logger)
     if config['daemon']:
         daemon()
-    mk_pid_file(config['pidfile'])
+    # mk_pid_file(config['pidfile'])
     start_server(config)
 
 
