@@ -1,17 +1,15 @@
-#! /bin/env python
+#! /usr/bin/env python
 
 
-import logging
-import struct
 import re
+import struct
+import logging
 
-from twisted.internet import reactor, protocol
 from twisted.names import client, dns
+from twisted.internet import reactor, protocol
 
 from utils import (
-        daemon,  parse_args,
-        ssl_ctx_factory, dns_cache, init_logger,
-        # mk_pid_file
+        daemonize, parse_args, ssl_ctx_factory, dns_cache, init_logger,
 )
 
 
@@ -28,8 +26,8 @@ config = {
         'ca': 'keys/ca.crt',
         'key': 'keys/server.key',
         'cert': 'keys/server.crt',
-        'pidfile': 's54http.pid',
-        'logfile': 's54http.log',
+        'pidfile': 'socks.pid',
+        'logfile': 'socks.log',
         'loglevel': 'INFO'
 }
 
@@ -42,6 +40,7 @@ def verify_tun(conn, x509, errno, errdepth, ok):
 
 
 class remote_protocol(protocol.Protocol):
+
     def connectionMade(self):
         self.local_sock.remoteConnectionMade(self)
 
@@ -50,6 +49,7 @@ class remote_protocol(protocol.Protocol):
 
 
 class remote_factory(protocol.ClientFactory):
+
     def __init__(self, sock, host=''):
         self.protocol = remote_protocol
         self.local_sock = sock
@@ -78,10 +78,11 @@ class remote_factory(protocol.ClientFactory):
         self.local_sock.transport.loseConnection()
 
 
-ncache = dns_cache(1000)
+CACHE = dns_cache(1000)
 
 
 class socks5_protocol(protocol.Protocol):
+
     def connectionMade(self):
         self.state = 'waitHello'
         self.buf = b''
@@ -129,8 +130,7 @@ class socks5_protocol(protocol.Protocol):
         self.buf += data
         if len(self.buf) < 4:
             return
-        ver, cmd, rsv, atyp = struct.unpack('!BBBB',
-                                            data[:4])
+        ver, cmd, rsv, atyp = struct.unpack('!BBBB', data[:4])
         if ver != 5 or rsv != 0:
             logger.error('ver: %d rsv: %d', ver, rsv)
             self.transport.loseConnection()
@@ -140,10 +140,7 @@ class socks5_protocol(protocol.Protocol):
                 if len(self.buf) < 10:
                     return
                 b1, b2, b3, b4 = struct.unpack('!BBBB', self.buf[4:8])
-                host = '{}.{}.{}.{}'.format(b1,
-                                            b2,
-                                            b3,
-                                            b4)
+                host = '{}.{}.{}.{}'.format(b1, b2, b3, b4)
                 port, = struct.unpack('!H', self.buf[8:10])
                 self.buf = b''
                 self.state = 'waitRemoteConnection'
@@ -161,15 +158,15 @@ class socks5_protocol(protocol.Protocol):
                 port, = struct.unpack('!H', self.buf[5+nlen:7+nlen])
                 self.buf = b''
 
-                if _ip.match(host) is not None:
+                if _ip.match(host):
                     self.state = 'waitRemoteConnection'
                     logger.info('state: waitRemoteConnection')
                     self.connectRemote(host, port)
                     logger.info('connect %s:%d', host, port)
                     return
 
-                if host in ncache:
-                    self.connectRemote(ncache[host], port)
+                if host in CACHE:
+                    self.connectRemote(CACHE[host], port)
                     logger.info('connect %s:%d', host, port)
                     self.state = 'waitRemoteConnection'
                     logger.info('state: waitRemoteConnection')
@@ -182,7 +179,7 @@ class socks5_protocol(protocol.Protocol):
                     for a in answers:
                         if a.type == dns.A:
                             addr = a.payload.dottedQuad()
-                            ncache[host] = addr
+                            CACHE[host] = addr
                             self.connectRemote(addr, port)
                             logger.info('connecting %s:%d', host, port)
                             self.state = 'waitRemoteConnection'
@@ -269,8 +266,13 @@ def main():
     parse_args(config)
     init_logger(config, logger)
     if config['daemon']:
-        daemon()
-    # mk_pid_file(config['pidfile'])
+        pidfile = config['pidfile']
+        logfile = config['logfile']
+        daemonize(
+                pidfile,
+                stdout=logfile,
+                stderr=logfile
+        )
     start_server(config)
 
 

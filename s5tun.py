@@ -1,12 +1,11 @@
-#! /bin/env python
+#! /usr/bin/env python
 
 
 import logging
 from twisted.internet import reactor, protocol
 
 from utils import (
-        daemon, parse_args, mk_pid_file,
-        ssl_ctx_factory, check_s5tun_config, init_logger
+        daemonize, parse_args, ssl_ctx_factory, init_logger
 )
 
 config = {
@@ -17,8 +16,8 @@ config = {
         'ca': 'keys/ca.crt',
         'key': 'keys/client.key',
         'cert': 'keys/client.crt',
-        'pidfile': 's5tun.pid',
-        'logfile': 's5tun.log',
+        'pidfile': 'socks.pid',
+        'logfile': 'socks.log',
         'loglevel': 'INFO'
 }
 
@@ -38,6 +37,7 @@ def verify_proxy(conn, x509, errno, errdepth, ok):
 
 
 class sock_remote_protocol(protocol.Protocol):
+
     def connectionMade(self):
         self.local_sock.remoteConnectionMade(self)
 
@@ -46,9 +46,10 @@ class sock_remote_protocol(protocol.Protocol):
 
 
 class sock_remote_factory(protocol.ClientFactory):
+
     def __init__(self, sock):
-        self.protocol = sock_remote_protocol
         self.local_sock = sock
+        self.protocol = sock_remote_protocol
 
     def buildProtocol(self, addr):
         p = protocol.ClientFactory.buildProtocol(self, addr)
@@ -71,6 +72,7 @@ class sock_remote_factory(protocol.ClientFactory):
 
 
 class sock_local_protocol(protocol.Protocol):
+
     def __init__(self):
         self.state = 'waitRemote'
         self.buf = b''
@@ -100,6 +102,7 @@ class sock_local_protocol(protocol.Protocol):
 
 
 class sock_local_factory(protocol.ServerFactory):
+
     def __init__(self, saddr, sport, ssl_ctx):
         self.saddr, self.sport = saddr, sport
         self.ssl_ctx = ssl_ctx
@@ -139,11 +142,17 @@ def start_server(config):
 
 def main():
     parse_args(config)
+    if not config['saddr']:
+        raise RuntimeError('no server address found')
     init_logger(config, logger)
-    check_s5tun_config(config)
     if config['daemon']:
-        daemon()
-    mk_pid_file(config['pidfile'])
+        pidfile = config['pidfile']
+        logfile = config['logfile']
+        daemonize(
+                pidfile,
+                stdout=logfile,
+                stderr=logfile
+        )
     start_server(config)
 
 

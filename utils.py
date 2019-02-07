@@ -1,15 +1,67 @@
+# -*- coding: utf-8 -*-
+
+
 import os
 import sys
+import atexit
+import signal
 import logging
+from pathlib import Path
+from argparse import ArgumentParser
 from collections import OrderedDict
-
-from optparse import OptionParser
 
 from OpenSSL import SSL as ssl
 
 
+def daemonize(pidfile, *,
+              stdin='/dev/null',
+              stdout='/dev/null',
+              stderr='/dev/null'):
+
+    if os.path.exists(pidfile):
+        raise RuntimeError('already running')
+
+    try:
+        if os.fork() > 0:
+            raise SystemExit(0)
+    except OSError as e:
+        raise RuntimeError(f'fork #1 failed: {e}')
+
+    os.chdir('/')
+    os.umask(0)
+    os.setsid()
+
+    try:
+        if os.fork() > 0:
+            raise SystemExit(0)
+    except OSError as e:
+        raise RuntimeError(f'fork #2 failed: {e}')
+
+    sys.stdin.flush()
+    sys.stdout.flush()
+
+    with open(stdin, 'rb', 0) as f:
+        os.dup2(f.fileno(), sys.stdin.fileno())
+    with open(stdout, 'ab', 0) as f:
+        os.dup2(f.fileno(), sys.stdout.fileno())
+    with open(stderr, 'ab', 0) as f:
+        os.dup2(f.fileno(), sys.stderr.fileno())
+
+    with open(pidfile, 'w') as f:
+        print(os.getpid(), file=f)
+
+    atexit.register(lambda: os.remove(pidfile))
+
+    def sigterm_handler(signo, frame):
+        os.remove(pidfile)
+        raise SystemExit(1)
+
+    signal.signal(signal.SIGTERM, sigterm_handler)
+
+
 class dns_cache(OrderedDict):
-    def __init__(self, limit=None):
+
+    def __init__(self, limit=1024):
         super(dns_cache, self).__init__()
         self.limit = limit
 
@@ -20,6 +72,7 @@ class dns_cache(OrderedDict):
 
 
 class ssl_ctx_factory:
+
     method = ssl.TLSv1_2_METHOD
     _ctx = None
 
@@ -39,10 +92,12 @@ class ssl_ctx_factory:
             ctx.use_privatekey_file(self._key)
             ctx.check_privatekey()
             ctx.load_verify_locations(self._ca)
-            ctx.set_verify(ssl.VERIFY_PEER |
-                           ssl.VERIFY_FAIL_IF_NO_PEER_CERT |
-                           ssl.VERIFY_CLIENT_ONCE,
-                           self._verify)
+            ctx.set_verify(
+                    ssl.VERIFY_PEER |
+                    ssl.VERIFY_FAIL_IF_NO_PEER_CERT |
+                    ssl.VERIFY_CLIENT_ONCE,
+                    self._verify
+            )
             self._ctx = ctx
 
     def __getstate__(self):
@@ -57,66 +112,89 @@ class ssl_ctx_factory:
         return self._ctx
 
 
-def daemon():
-    pid = os.fork()
-    if pid > 0:
-        sys.exit(0)
-    sys.stdin.close()
-
-
-def mk_pid_file(pid_file):
-    pid = os.getpid()
-    with open(pid_file, 'w') as f:
-        f.write(str(pid))
-
-
 def init_logger(config, logger):
-    name, level = config['logfile'], config['loglevel']
+    level = config['loglevel']
     formatter = logging.Formatter(
         '%(asctime)s-%(levelname)s : %(message)s',
-        '%Y-%m-%d %H:%M:%S')
-    if config['daemon']:
-        handler = logging.FileHandler(name)
-    else:
-        handler = logging.StreamHandler(sys.stdout)
+        '%Y-%m-%d %H:%M:%S'
+    )
+    handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(formatter)
     logger.setLevel(level)
     logger.addHandler(handler)
 
 
-def check_s5tun_config(config):
-    if config['saddr'] == '':
-        logging.error("socks5 proxy address is null")
-        sys.exit(-1)
-
-
 def parse_args(config):
-    usage = "usage: %s [options]" % (sys.argv[0])
-    parser = OptionParser(usage)
-    parser.add_option("-d", "--daemon", dest="daemon",
-                      action="store_true",
-                      help="run app at backgroud")
-    parser.add_option("-p", "--port", dest="port", type="int",
-                      help="listen port")
-    parser.add_option("-k", "--key", dest="key", type="string",
-                      help="key file path")
-    parser.add_option("-a", "--ca", dest="ca", type="string",
-                      help="ca file path")
-    parser.add_option("-c", "--cert", dest="cert", type="string",
-                      help="cert file path")
-    parser.add_option("-S", "--saddr", dest="saddr", type="string",
-                      help="remote proxy address")
-    parser.add_option("-P", "--sport", dest="sport", type="int",
-                      help="remote proxy port")
-    parser.add_option("-f", "--pidfile", dest="pidfile", type="string",
-                      help="pid file path")
-    parser.add_option("-l", "--logfile", dest="logfile", type="string",
-                      help="log file path")
-    parser.add_option("-e", "--loglevel", dest="loglevel", type="string",
-                      help="log level [INFO, WARN, ERROR]")
-
-    options, args = parser.parse_args()
-    for k in config.keys():
-        v = getattr(options, k, None)
-        if v is not None:
-            config[k] = v
+    usage = f"usage: {sys.argv[0]} [options]"
+    parser = ArgumentParser(usage)
+    parser.add_argument(
+            "-d",
+            "--daemon",
+            dest="daemon",
+            action="store_true",
+            help="run app at backgroud"
+    )
+    parser.add_argument(
+            "-p",
+            "--port",
+            dest="port",
+            type=int,
+            help="listen port"
+    )
+    parser.add_argument(
+            "-k",
+            "--key",
+            dest="key",
+            help="key file path"
+    )
+    parser.add_argument(
+            "-a",
+            "--ca",
+            dest="ca",
+            help="ca file path"
+    )
+    parser.add_argument(
+            "-c",
+            "--cert",
+            dest="cert",
+            help="cert file path"
+    )
+    parser.add_argument(
+            "-S",
+            "--saddr",
+            dest="saddr",
+            help="remote proxy address"
+    )
+    parser.add_argument(
+            "-P",
+            "--sport",
+            dest="sport",
+            type=int,
+            help="remote proxy port"
+    )
+    parser.add_argument(
+            "-f",
+            "--pidfile",
+            dest="pidfile",
+            help="pid file path"
+    )
+    parser.add_argument(
+            "-l",
+            "--logfile",
+            dest="logfile",
+            help="log file path"
+    )
+    parser.add_argument(
+            "-e",
+            "--loglevel",
+            dest="loglevel",
+            help="INFO, WARN, ERROR"
+    )
+    args = parser.parse_args()
+    for key in config.keys():
+        value = getattr(args, key, None)
+        if value:
+            config[key] = value
+    for key in ('ca', 'key', 'cert', 'pidfile', 'logfile'):
+        value = config[key]
+        config[key] = str(Path(value).absolute())
