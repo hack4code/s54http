@@ -120,7 +120,6 @@ class socks_dispatcher:
         sock_id = id(sock)
         self.socks[sock_id] = sock
         ip = [int(item) for item in remote_addr.split('.')]
-        logger.info('ip %s', ip)
         message = struct.pack(
                 '!HBQBBBBH',
                 17,

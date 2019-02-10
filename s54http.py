@@ -72,21 +72,6 @@ class remote_factory(protocol.ClientFactory):
         p.factory = self
         return p
 
-    def bufferRemote(self, data):
-        self.buffer += data
-        if not self.connected:
-            logger.info(
-                    'connect to %s:%u',
-                    self.host,
-                    self.port
-            )
-            reactor.connectTCP(
-                    self.host,
-                    self.port,
-                    self
-            )
-            self.connected = True
-
     def clientConnectionFailed(self, connector, reason):
         logger.error('connect failed[%s]', reason.getErrorMessage())
         self.dispatcher.handleConnect(self.sock_id, 1)
@@ -175,8 +160,19 @@ class socks_dispatcher:
             except KeyError:
                 logger.error('receive unknown factory %u', sock_id)
             else:
-                logger.info('factory buffer data')
-                factory.bufferRemote(data)
+                if not factory.connected:
+                    logger.info(
+                            'reactor connect to %s:%u',
+                            factory.host,
+                            factory.port
+                    )
+                    reactor.connectTCP(
+                            factory.host,
+                            factory.port,
+                            factory
+                    )
+                    factory.connected = True
+                factory.buffer += data
         else:
             sock.transport.write(data)
 
