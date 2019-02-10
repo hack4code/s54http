@@ -149,7 +149,9 @@ class socks_dispatcher:
         except KeyError:
             logger.error('receive from unknown sock %u', sock_id)
         else:
-            sock.remoteConnectionMade(code)
+            if 0 != code:
+                sock.remoteConnectionFailed()
+                del self.socks[sock_id]
 
     def sendRemote(self, sock, data):
         """
@@ -266,14 +268,13 @@ class sock_local_protocol(protocol.Protocol):
             return
         for method in self.buffer[2:2+nmethods]:
             if method == 0:
+                self.buffer = b''
                 self.state = 'waitConnectRemote'
                 logger.info('state: waitConnectRemote')
-                self.buffer = b''
                 self.sendHelloReply(0)
                 return
-        else:
-            self.sendHelloReply(0xFF)
-            self.transport.loseConnection()
+        self.sendHelloReply(0xFF)
+        self.transport.loseConnection()
 
     def sendHelloReply(self, code):
         response = struct.pack('!BB', 5, code)
@@ -366,7 +367,7 @@ class sock_local_protocol(protocol.Protocol):
         self.transport.write(response)
 
     def waitNameResolve(self, data):
-        logger.error('receive data when name resolving')
+        logger.error('receive data when waitNameResolve')
 
     def connectRemote(self, host, port):
         self.remote_addr = host
@@ -374,23 +375,17 @@ class sock_local_protocol(protocol.Protocol):
         logger.info('connect to %s:%d', host, port)
         self.dispatcher.connectRemote(self, host, port)
         self.buffer = b''
-        self.state = 'waitRemote'
+        self.state = 'sendRemote'
+        logger.info('state: sendRemote')
+        self.sendConnectReply(0)
 
-    def waitRemote(self, data):
-        self.buffer += data
-
-    def remoteConnectionMade(self, code):
-        if code == 0:
-            self.state = 'sendRemote'
-            self.sendRemote(self.buffer)
-            self.buffer = b''
-        else:
-            logger.error(
-                    'connect failed %s:%d',
-                    self.remote_addr,
-                    self.remote_port
-            )
-            self.transport.loseConnection()
+    def remoteConnectionFailed(self):
+        logger.error(
+                'connect failed %s:%d',
+                self.remote_addr,
+                self.remote_port
+        )
+        self.transport.loseConnection()
 
     def sendRemote(self, data):
         self.dispatcher.sendRemote(self, data)

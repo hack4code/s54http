@@ -36,10 +36,13 @@ def verify(conn, x509, errno, errdepth, ok):
 class remote_protocol(protocol.Protocol):
 
     def connectionMade(self):
+        if len(self.factory.buffer) > 0:
+            self.transport.write(self.factory.buffer)
+            self.factory.buffer = b''
         self.dispatcher.handleConnect(
                 self.sock_id,
                 0,
-                sock=self
+                self
         )
 
     def dataReceived(self, data):
@@ -48,16 +51,27 @@ class remote_protocol(protocol.Protocol):
 
 class remote_factory(protocol.ClientFactory):
 
-    def __init__(self, dispatcher, sock_id):
+    def __init__(self, dispatcher, sock_id, host, port):
         self.protocol = remote_protocol
         self.dispatcher = dispatcher
         self.sock_id = sock_id
+        self.host = host
+        self.port = port
+        self.buffer = b''
+        self.connected = False
 
     def buildProtocol(self, addr):
         p = protocol.ClientFactory.buildProtocol(self, addr)
         p.dispatcher = self.dispatcher
         p.sock_id = self.sock_id
+        p.factory = self
         return p
+
+    def bufferRemote(self, data):
+        self.buffer += data
+        if not self.connected:
+            reactor.connectTCP(self.host, self.port, self)
+            self.connected = False
 
     def clientConnectionFailed(self, connector, reason):
         logger.error('connect failed[%s]', reason.getErrorMessage())
@@ -72,6 +86,7 @@ class socks_dispatcher:
 
     def __init__(self, transport):
         self.socks = {}
+        self.factories = {}
         self.transport = transport
 
     def dispatchMessage(self, message):
@@ -95,12 +110,12 @@ class socks_dispatcher:
         +-----+------+----+------+------+
         """
         sock_id, = struct.unpack('!Q', message[3:11])
+        assert sock_id not in self.socks
         ip = struct.unpack('!BBBB', message[11:15])
         host = f'{ip[0]}.{ip[1]}.{ip[2]}.{ip[3]}'
         port, = struct.unpack('!H', message[15:17])
         logger.info('connect to %s:%d', host, port)
-        factory = remote_factory(self, sock_id)
-        reactor.connectTCP(host, port, factory)
+        self.factories[sock_id] = remote_factory(self, sock_id, host, port)
 
     def handleConnect(self, sock_id, code, *, sock=None):
         """
@@ -112,16 +127,20 @@ class socks_dispatcher:
         +-----+------+----+------+
         """
         if code == 0:
-            assert sock
             self.socks[sock_id] = sock
-        message = struct.pack(
-                '!HBQB',
-                12,
-                2,
-                sock_id,
-                code
-        )
-        self.transport.write(message)
+            try:
+                del self.factories[sock_id]
+            except KeyError:
+                logger.error('receive unknown factory %u', sock_id)
+        else:
+            message = struct.pack(
+                    '!HBQB',
+                    12,
+                    2,
+                    sock_id,
+                    code
+            )
+            self.transport.write(message)
 
     def sendRemote(self, message):
         """
@@ -137,7 +156,12 @@ class socks_dispatcher:
         try:
             sock = self.socks[sock_id]
         except KeyError:
-            logger.error('send to unknown sock %u', sock_id)
+            try:
+                factory = self.factories[sock_id]
+            except KeyError:
+                logger.error('receive unknown sock %u', sock_id)
+            else:
+                factory.bufferRemote(data)
         else:
             sock.transport.write(data)
 
