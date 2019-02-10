@@ -60,19 +60,11 @@ class remote_factory(protocol.ClientFactory):
         return p
 
     def clientConnectionFailed(self, connector, reason):
-        logger.error(
-                'connect failed %s[%s]',
-                self.remote_host,
-                reason.getErrorMessage()
-        )
+        logger.error('connect failed[%s]', reason.getErrorMessage())
         self.dispatcher.handleConnect(self.sock_id, 1)
 
     def clientConnectionLost(self, connector, reason):
-        logger.info(
-                'connetion to %s closed: %s',
-                self.remote_host,
-                reason.getErrorMessage()
-        )
+        logger.info('connetion closed[%s]', reason.getErrorMessage())
         self.dispatcher.handleClose(self.sock_id)
 
 
@@ -106,6 +98,7 @@ class socks_dispatcher:
         ip = struct.unpack('!BBBB', message[7:11])
         host = '.'.join(str(item) for item in ip)
         port, = struct.unpack('!H', message[11:13])
+        logger.info('connect to %s:%d', host, port)
         factory = remote_factory(self, sock_id)
         reactor.connectTCP(host, port, factory)
 
