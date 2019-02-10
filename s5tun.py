@@ -114,7 +114,7 @@ class socks_dispatcher:
         +-----+------+----+------+------+
         | LEN | TYPE | ID | ADDR | PORT |
         +-----+------+----+------+------+
-        |  2  |   1  | 4  |   4  |   2  |
+        |  2  |   1  |  8 |   4  |   2  |
         +-----+------+----+------+------+
         """
         sock_id = id(sock)
@@ -122,7 +122,7 @@ class socks_dispatcher:
         ip = [int(item) for item in remote_addr.split('.')]
         message = struct.pack(
                 '!HBQBBBBH',
-                13,
+                17,
                 1,
                 sock_id,
                 ip[0],
@@ -139,10 +139,10 @@ class socks_dispatcher:
         +-----+------+----+------+
         | LEN | TYPE | ID | CODE |
         +-----+------+----+------+
-        |  2  |   1  | 4  |   1  |
+        |  2  |   1  |  8 |   1  |
         +-----+------+----+------+
         """
-        sock_id, code = struct.unpack('!iB', message[3:])
+        sock_id, code = struct.unpack('!QB', message[3:12])
         try:
             sock = self.socks[sock_id]
         except KeyError:
@@ -156,11 +156,11 @@ class socks_dispatcher:
         +-----+------+----+------+
         | LEN | TYPE | ID | DATA |
         +-----+------+----+------+
-        |  2  |   1  | 4  |      |
+        |  2  |   1  |  8 |      |
         +-----+------+----+------+
         """
         sock_id = id(sock)
-        length = 7 + len(data)
+        length = 11 + len(data)
         message = struct.pack(
                 '!HBQs',
                 length,
@@ -176,10 +176,10 @@ class socks_dispatcher:
         +-----+------+----+------+
         | LEN | TYPE | ID | DATA |
         +-----+------+----+------+
-        |  2  |   1  |  4 |      |
+        |  2  |   1  |  8 |      |
         +-----+------+----+------+
         """
-        sock_id, data = struct.unpack('!is', message[3:])
+        sock_id, data = struct.unpack('!Qs', message[3:])
         sock = self.socks[sock_id]
         sock.transport.write(data)
 
@@ -189,13 +189,13 @@ class socks_dispatcher:
         +-----+------+----+
         | LEN | TYPE | ID |
         +-----+------+----+
-        |  2  |   1  |  4 |
+        |  2  |   1  |  8 |
         +-----+------+----+
         """
         sock_id = id(sock)
         message = struct.pack(
                 '!HBQ',
-                7,
+                11,
                 5,
                 sock_id
         )
@@ -211,10 +211,10 @@ class socks_dispatcher:
         +-----+------+----+
         | LEN | TYPE | ID |
         +-----+------+----+
-        |  2  |   1  |  4 |
+        |  2  |   1  |  8 |
         +-----+------+----+
         """
-        sock_id, = struct.unpack('!i')
+        sock_id, = struct.unpack('!Q', message[3:11])
         try:
             sock = self.socks[sock_id]
         except KeyError:
