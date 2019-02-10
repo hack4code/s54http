@@ -96,7 +96,7 @@ class socks_dispatcher:
         """
         sock_id, = struct.unpack('!Q', message[3:11])
         ip = struct.unpack('!BBBB', message[11:15])
-        host = '.'.join(str(item) for item in ip)
+        host = f'{ip[0]}.{ip[1]}.{ip[2]}.{ip[3]}'
         port, = struct.unpack('!H', message[15:17])
         logger.info('connect to %s:%d', host, port)
         factory = remote_factory(self, sock_id)
