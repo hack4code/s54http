@@ -1,23 +1,17 @@
 #! /usr/bin/env python
 
 
-import re
 import struct
 import logging
 
-from twisted.names import client, dns
 from twisted.internet import reactor, protocol
 
 from utils import (
-        daemonize, parse_args, ssl_ctx_factory, dns_cache, init_logger,
+        daemonize, parse_args, ssl_ctx_factory, init_logger,
 )
 
 
 logger = logging.getLogger(__name__)
-
-
-_ip = re.compile(r'[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}')
-dns_server = client.createResolver(servers=[('8.8.8.8', 53)])
 
 
 config = {
@@ -32,42 +26,46 @@ config = {
 }
 
 
-def verify_tun(conn, x509, errno, errdepth, ok):
+def verify(conn, x509, errno, errdepth, ok):
     if not ok:
         cn = x509.get_subject().commonName
-        logger.error('ssl verify failed: errno=%d cn=%s', errno, cn)
+        logger.error('client verify failed errno=%d cn=%s', errno, cn)
     return ok
 
 
 class remote_protocol(protocol.Protocol):
 
     def connectionMade(self):
-        self.local_sock.remoteConnectionMade(self)
+        self.dispatcher.handleConnect(
+                self.sock_id,
+                0,
+                sock=self
+        )
 
     def dataReceived(self, data):
-        self.local_sock.transport.write(data)
+        self.dispatcher.handleRemote(self.sock_id, data)
 
 
 class remote_factory(protocol.ClientFactory):
 
-    def __init__(self, sock, host=''):
+    def __init__(self, dispatcher, sock_id):
         self.protocol = remote_protocol
-        self.local_sock = sock
-        self.remote_host = host
+        self.dispatcher = dispatcher
+        self.sock_id = sock_id
 
     def buildProtocol(self, addr):
         p = protocol.ClientFactory.buildProtocol(self, addr)
-        p.local_sock = self.local_sock
+        p.dispatcher = self.dispatcher
+        p.sock_id = self.sock_id
         return p
 
     def clientConnectionFailed(self, connector, reason):
         logger.error(
-                'connect %s failed: %s',
+                'connect failed %s[%s]',
                 self.remote_host,
                 reason.getErrorMessage()
         )
-        self.local_sock.sendConnectReply(5)
-        self.local_sock.transport.loseConnection()
+        self.dispatcher.handleConnect(self.sock_id, 1)
 
     def clientConnectionLost(self, connector, reason):
         logger.info(
@@ -75,175 +73,158 @@ class remote_factory(protocol.ClientFactory):
                 self.remote_host,
                 reason.getErrorMessage()
         )
-        self.local_sock.transport.loseConnection()
+        self.dispatcher.handleClose(self.sock_id)
 
 
-CACHE = dns_cache(1000)
+class socks_dispatcher:
+
+    def __init__(self, transport):
+        self.socks = {}
+        self.transport = transport
+
+    def dispatchMessage(self, message):
+        type = struct.unpack('!B', message[2:3])
+        if 1 == type:
+            self.connectRemote(message)
+        elif 3 == type:
+            self.sendRemote(message)
+        elif 5 == type:
+            self.closeRemote(message)
+        else:
+            logger.error('unknown message type %d', type)
+
+    def connectRemote(self, message):
+        """
+        type 1:
+        +-----+------+----+------+------+
+        | LEN | TYPE | ID | ADDR | PORT |
+        +-----+------+----+------+------+
+        |  2  |   1  | 4  |   4  |   2  |
+        +-----+------+----+------+------+
+        """
+        sock_id = struct.unpack('!i', message[3:7])
+        ip = struct.unpack('!BBBB', message[7:11])
+        host = '.'.join(str(item) for item in ip)
+        port = struct.unpack('!H', message[11:13])
+        factory = remote_factory(self, sock_id)
+        reactor.connectTCP(host, port, factory)
+
+    def handleConnect(self, sock_id, code, *, sock=None):
+        """
+        type 2:
+        +-----+------+----+------+
+        | LEN | TYPE | ID | CODE |
+        +-----+------+----+------+
+        |  2  |   1  | 4  |   1  |
+        +-----+------+----+------+
+        """
+        if code == 0:
+            assert sock
+            self.socks[sock_id] = sock
+        message = struct.pack(
+                '!HBiB',
+                8,
+                2,
+                sock_id,
+                code
+        )
+        self.transport.write(message)
+
+    def sendRemote(self, message):
+        """
+        type 3:
+        +-----+------+----+------+
+        | LEN | TYPE | ID | DATA |
+        +-----+------+----+------+
+        |  2  |   1  | 4  |      |
+        +-----+------+----+------+
+        """
+        sock_id = struct.unpack('!i', message[3:7])
+        data = struct.unpack('!s', message[7:])
+        try:
+            sock = self.socks[sock_id]
+        except KeyError:
+            logger.error('send to unknown sock %d', sock_id)
+        else:
+            sock.transport.write(data)
+
+    def handleRemote(self, sock_id, data):
+        """
+        type 4:
+        +-----+------+----+------+
+        | LEN | TYPE | ID | DATA |
+        +-----+------+----+------+
+        |  2  |   1  |  4 |      |
+        +-----+------+----+------+
+        """
+        length = 7 + len(data)
+        message = struct.pack(
+                '!HBis',
+                length,
+                4,
+                sock_id,
+                data
+        )
+        self.transport.write(message)
+
+    def closeRemote(self, message):
+        """
+        type 5:
+        +-----+------+----+
+        | LEN | TYPE | ID |
+        +-----+------+----+
+        |  2  |   1  |  4 |
+        +-----+------+----+
+        """
+        sock_id = struct.unpack('!i', message[3:7])
+        try:
+            sock = self.socks[sock_id]
+        except KeyError:
+            logger.error('close unknown receive sock %d', sock_id)
+        else:
+            sock.transport.loseConnection()
+            del self.socks[sock_id]
+
+    def handleClose(self, sock_id):
+        """
+        type 6:
+        +-----+------+----+
+        | LEN | TYPE | ID |
+        +-----+------+----+
+        |  2  |   1  |  4 |
+        +-----+------+----+
+        """
+        message = struct.pack(
+                '!HBi',
+                7,
+                6,
+                sock_id
+        )
+        self.transport.write(message)
+        try:
+            del self.socks[sock_id]
+        except KeyError:
+            logger.error('close unknown send sock %d', sock_id)
 
 
 class socks5_protocol(protocol.Protocol):
 
     def connectionMade(self):
-        self.state = 'waitHello'
         self.buf = b''
-        self.remote_sock = None
+        self.dispatcher = socks_dispatcher(self.transport)
 
     def connectionLost(self, reason=None):
-        logger.info('tunnel connetion closed')
-        if self.remote_sock is not None:
-            logger.info('close remote connection')
-            self.remote_sock.transport.loseConnection()
+        logger.info('connetion closed')
 
     def dataReceived(self, data):
-        method = getattr(self, self.state)
-        method(data)
-
-    def waitHello(self, data):
-        self.buf += data
-        if len(self.buf) < 2:
+        self.buffer += data
+        if len(self.buffer) < 2:
             return
-        ver, nmethods = struct.unpack('!BB', self.buf[:2])
-        logger.info('version=%d, nmethods=%d', ver, nmethods)
-        if ver != 5:
-            logger.error('socks %d not supported', ver)
-            self.sendHelloReply(0xFF)
-            self.transport.loseConnection()
+        length = struct.unpack('!h', self.buffer[:2])
+        if len(self.buffer) < length:
             return
-        if nmethods < 1:
-            logger.error('no method')
-            self.sendHelloReply(0xFF)
-            self.transport.loseConnection()
-            return
-        if len(self.buf) < nmethods + 2:
-            return
-        for method in self.buf[2:2+nmethods]:
-            if method == 0:
-                self.buf = b''
-                self.state = 'waitConnectRemote'
-                logger.info('state: waitConnectRemote')
-                self.sendHelloReply(0)
-                return
-        self.sendHelloReply(0xFF)
-        self.transport.loseConnection()
-
-    def waitConnectRemote(self, data):
-        self.buf += data
-        if len(self.buf) < 4:
-            return
-        ver, cmd, rsv, atyp = struct.unpack('!BBBB', data[:4])
-        if ver != 5 or rsv != 0:
-            logger.error('ver: %d rsv: %d', ver, rsv)
-            self.transport.loseConnection()
-            return
-        if cmd == 1:
-            if atyp == 1:
-                if len(self.buf) < 10:
-                    return
-                b1, b2, b3, b4 = struct.unpack('!BBBB', self.buf[4:8])
-                host = '{}.{}.{}.{}'.format(b1, b2, b3, b4)
-                port, = struct.unpack('!H', self.buf[8:10])
-                self.buf = b''
-                self.state = 'waitRemoteConnection'
-                logger.info('state: waitRemoteConnection')
-                self.connectRemote(host, port)
-                logger.info('connect %s:%d', host, port)
-                return
-            elif atyp == 3:
-                if len(self.buf) < 5:
-                    return
-                nlen, = struct.unpack('!B', self.buf[4:5])
-                if len(self.buf) < 5 + nlen + 2:
-                    return
-                host = self.buf[5:5+nlen].decode('utf-8').strip()
-                port, = struct.unpack('!H', self.buf[5+nlen:7+nlen])
-                self.buf = b''
-
-                if _ip.match(host):
-                    self.state = 'waitRemoteConnection'
-                    logger.info('state: waitRemoteConnection')
-                    self.connectRemote(host, port)
-                    logger.info('connect %s:%d', host, port)
-                    return
-
-                if host in CACHE:
-                    self.connectRemote(CACHE[host], port)
-                    logger.info('connect %s:%d', host, port)
-                    self.state = 'waitRemoteConnection'
-                    logger.info('state: waitRemoteConnection')
-                    return
-
-                d = dns_server.lookupAddress(host)
-
-                def resolve_ok(records, host, port):
-                    answers, *_ = records
-                    for a in answers:
-                        if a.type == dns.A:
-                            addr = a.payload.dottedQuad()
-                            CACHE[host] = addr
-                            self.connectRemote(addr, port)
-                            logger.info('connecting %s:%d', host, port)
-                            self.state = 'waitRemoteConnection'
-                            logger.info('state: waitRemoteConnection')
-                            break
-                    else:
-                        logger.error('%s dns failed', host)
-                        self.sendConnectReply(5)
-                        self.transport.loseConnection()
-
-                d.addCallback(resolve_ok, host, port)
-
-                def resolve_err(res):
-                    logger.error('%s dns error', res)
-                    self.sendConnectReply(5)
-                    self.transport.loseConnection()
-
-                d.addErrback(resolve_err)
-                self.state = 'waitNameRes'
-                logger.info('state: waitNameResolve')
-                return
-            else:
-                logger.error('type %d', atyp)
-                self.transport.loseConnection()
-                return
-        else:
-            logger.error('command %d not supported', cmd)
-            self.transport.loseConnection()
-
-    def waitNameResolve(self, data):
-        logger.error('recv data when name resolving')
-
-    def waitRemoteConnection(self, data):
-        logger.error('recv data when connecting remote')
-
-    def sendRemote(self, data):
-        self.remote_sock.transport.write(data)
-
-    def remoteConnectionMade(self, sock):
-        self.remote_sock = sock
-        self.sendConnectReply(0)
-        self.state = 'sendRemote'
-        logger.info('state: sendRemote')
-
-    def sendHelloReply(self, code):
-        resp = struct.pack('!BB', 5, code)
-        self.transport.write(resp)
-
-    def sendConnectReply(self, code):
-        try:
-            addr = self.transport.getHost().host
-        except Exception:
-            logger.error('getHost error')
-            self.transport.loseConnection()
-            return
-        ip = [int(i) for i in addr.split('.')]
-        resp = struct.pack('!BBBB', 5, code, 0, 1)
-        resp += struct.pack('!BBBB', ip[0], ip[1], ip[2], ip[3])
-        resp += struct.pack('!H', self.transport.getHost().port)
-        self.transport.write(resp)
-
-    def connectRemote(self, host, port):
-        factory = remote_factory(self, host=host)
-        reactor.connectTCP(host, port, factory)
+        self.dispatcher.dispatchMessage(self.buffer)
+        self.buffer = self.buffer[length:]
 
 
 def start_server(config):
@@ -256,7 +237,7 @@ def start_server(config):
             ca,
             key,
             cert,
-            verify_tun
+            verify
     )
     reactor.listenSSL(port, factory, ssl_ctx)
     reactor.run()
