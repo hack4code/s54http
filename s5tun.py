@@ -106,7 +106,7 @@ class socks_dispatcher:
         elif 6 == type:
             self.handleClose(message)
         else:
-            logger.error('unknown message type %d', type)
+            logger.error('unknown message type %u', type)
 
     def connectRemote(self, sock, remote_addr, remote_port):
         """
@@ -120,6 +120,7 @@ class socks_dispatcher:
         sock_id = id(sock)
         self.socks[sock_id] = sock
         ip = [int(item) for item in remote_addr.split('.')]
+        logger.info('ip %s', ip)
         message = struct.pack(
                 '!HBQBBBBH',
                 17,
@@ -146,7 +147,7 @@ class socks_dispatcher:
         try:
             sock = self.socks[sock_id]
         except KeyError:
-            logger.error('receive from unknown sock %d', sock_id)
+            logger.error('receive from unknown sock %u', sock_id)
         else:
             sock.remoteConnectionMade(code)
 
@@ -218,7 +219,7 @@ class socks_dispatcher:
         try:
             sock = self.socks[sock_id]
         except KeyError:
-            logger.error('receive from unknown sock %d', sock_id)
+            logger.error('receive from unknown sock %u', sock_id)
         else:
             sock.transport.loseConnection()
             del self.socks[sock_id]
@@ -252,7 +253,7 @@ class sock_local_protocol(protocol.Protocol):
         version, nmethods = struct.unpack('!BB', self.buffer[:2])
         logger.info('version=%d, nmethods=%d', version, nmethods)
         if version != 5:
-            logger.error('unsupported version %d', version)
+            logger.error('unsupported version %u', version)
             self.sendHelloReply(0xFF)
             self.transport.loseConnection()
             return
@@ -287,7 +288,7 @@ class sock_local_protocol(protocol.Protocol):
                 self.buffer[:4]
         )
         if version != 5:
-            logger.error('unsupported version %d', version)
+            logger.error('unsupported version %u', version)
             self.transport.loseConnection()
             return
         if reserved != 0:
@@ -295,11 +296,11 @@ class sock_local_protocol(protocol.Protocol):
             self.transport.loseConnection()
             return
         if command != 1:
-            logger.error('unsupported command %d', command)
+            logger.error('unsupported command %u', command)
             self.transport.loseConnection()
             return
         if atyp not in (1, 3):
-            logger.error('unsupported atyp %d', atyp)
+            logger.error('unsupported atyp %u', atyp)
             self.transport.loseConnection()
             return
         if atyp == 1:

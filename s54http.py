@@ -83,7 +83,7 @@ class socks_dispatcher:
         elif 5 == type:
             self.closeRemote(message)
         else:
-            logger.error('unknown message type %d', type)
+            logger.error('unknown message type %u', type)
 
     def connectRemote(self, message):
         """
@@ -137,7 +137,7 @@ class socks_dispatcher:
         try:
             sock = self.socks[sock_id]
         except KeyError:
-            logger.error('send to unknown sock %d', sock_id)
+            logger.error('send to unknown sock %u', sock_id)
         else:
             sock.transport.write(data)
 
@@ -173,7 +173,7 @@ class socks_dispatcher:
         try:
             sock = self.socks[sock_id]
         except KeyError:
-            logger.error('close unknown receive sock %d', sock_id)
+            logger.error('close unknown receive sock %u', sock_id)
         else:
             sock.transport.loseConnection()
             del self.socks[sock_id]
@@ -197,7 +197,7 @@ class socks_dispatcher:
         try:
             del self.socks[sock_id]
         except KeyError:
-            logger.error('close unknown send sock %d', sock_id)
+            logger.error('close unknown send sock %u', sock_id)
 
 
 class socks5_protocol(protocol.Protocol):
