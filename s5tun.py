@@ -118,7 +118,7 @@ class socks_dispatcher:
         self.socks[sock_id] = sock
         ip = [int(item) for item in remote_addr.split('.')]
         message = struct.pack(
-                '!HBiBBBBH',
+                '!HBQBBBBH',
                 13,
                 1,
                 sock_id,
@@ -159,7 +159,7 @@ class socks_dispatcher:
         sock_id = id(sock)
         length = 7 + len(data)
         message = struct.pack(
-                '!HBis',
+                '!HBQs',
                 length,
                 3,
                 sock_id,
@@ -191,7 +191,7 @@ class socks_dispatcher:
         """
         sock_id = id(sock)
         message = struct.pack(
-                '!HBi',
+                '!HBQ',
                 7,
                 5,
                 sock_id
@@ -226,13 +226,13 @@ class sock_local_protocol(protocol.Protocol):
     def __init__(self):
         self.remote_addr = None
         self.remote_port = None
-        self.buf = None
+        self.buffer = None
         self.state = None
         self.dispatcher = None
 
     def connectionMade(self):
         self.state = 'waitHello'
-        self.bufuffer = b''
+        self.buffer = b''
 
     def connectionLost(self, reason=None):
         logger.info('local connection closed')

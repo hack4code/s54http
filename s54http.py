@@ -122,7 +122,7 @@ class socks_dispatcher:
             assert sock
             self.socks[sock_id] = sock
         message = struct.pack(
-                '!HBiB',
+                '!HBQB',
                 8,
                 2,
                 sock_id,
@@ -159,7 +159,7 @@ class socks_dispatcher:
         """
         length = 7 + len(data)
         message = struct.pack(
-                '!HBis',
+                '!HBQs',
                 length,
                 4,
                 sock_id,
@@ -195,7 +195,7 @@ class socks_dispatcher:
         +-----+------+----+
         """
         message = struct.pack(
-                '!HBi',
+                '!HBQ',
                 7,
                 6,
                 sock_id
