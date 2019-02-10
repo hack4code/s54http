@@ -36,18 +36,15 @@ def verify(conn, x509, errno, errdepth, ok):
 class remote_protocol(protocol.Protocol):
 
     def connectionMade(self):
-        if len(self.factory.buffer) > 0:
-            self.transport.write(self.factory.buffer)
-            self.factory.buffer = b''
-        self.dispatcher.handleConnect(
-                self.sock_id,
-                0,
-                self
-        )
         logger.info(
                 'connect success %s:%u',
                 self.factory.host,
                 self.factory.port
+        )
+        self.dispatcher.handleConnect(
+                self.sock_id,
+                0,
+                sock=self
         )
 
     def dataReceived(self, data):
@@ -62,8 +59,6 @@ class remote_factory(protocol.ClientFactory):
         self.sock_id = sock_id
         self.host = host
         self.port = port
-        self.buffer = b''
-        self.connected = False
 
     def buildProtocol(self, addr):
         p = protocol.ClientFactory.buildProtocol(self, addr)
@@ -86,18 +81,24 @@ class socks_dispatcher:
     def __init__(self, transport):
         self.socks = {}
         self.factories = {}
+        self.bufferes = {}
+        self.connected = {}
         self.transport = transport
 
-    def dispatchMessage(self, message):
-        type, = struct.unpack('!B', message[2:3])
+    def dispatchMessage(self, message, total_length):
+        type, = struct.unpack('!B', message[4:5])
+        logger.info(
+                'receive message type=%u length=%u',
+                type,
+                total_length
+        )
+        assert type in (1, 3, 5)
         if 1 == type:
             self.connectRemote(message)
         elif 3 == type:
-            self.sendRemote(message)
+            self.sendRemote(message, total_length)
         elif 5 == type:
             self.closeRemote(message)
-        else:
-            logger.error('unknown message type %u', type)
 
     def connectRemote(self, message):
         """
@@ -105,16 +106,18 @@ class socks_dispatcher:
         +-----+------+----+------+------+
         | LEN | TYPE | ID | ADDR | PORT |
         +-----+------+----+------+------+
-        |  2  |   1  |  8 |   4  |   2  |
+        |  4  |   1  |  8 |   4  |   2  |
         +-----+------+----+------+------+
         """
-        sock_id, = struct.unpack('!Q', message[3:11])
+        sock_id, = struct.unpack('!Q', message[5:13])
         assert sock_id not in self.socks
-        ip = struct.unpack('!BBBB', message[11:15])
+        ip = struct.unpack('!BBBB', message[13:17])
         host = f'{ip[0]}.{ip[1]}.{ip[2]}.{ip[3]}'
-        port, = struct.unpack('!H', message[15:17])
+        port, = struct.unpack('!H', message[17:19])
         logger.info('connect to %s:%d', host, port)
         self.factories[sock_id] = remote_factory(self, sock_id, host, port)
+        self.connected[sock_id] = False
+        self.bufferes[sock_id] = b''
 
     def handleConnect(self, sock_id, code, *, sock=None):
         """
@@ -122,36 +125,42 @@ class socks_dispatcher:
         +-----+------+----+------+
         | LEN | TYPE | ID | CODE |
         +-----+------+----+------+
-        |  2  |   1  |  8 |   1  |
+        |  4  |   1  |  8 |   1  |
         +-----+------+----+------+
         """
         if code == 0:
             self.socks[sock_id] = sock
             try:
-                del self.factories[sock_id]
+                data = self.bufferes[sock_id]
             except KeyError:
-                logger.error('receive unknown factory %u', sock_id)
+                pass
+            else:
+                if len(data) > 0:
+                    sock.transport.write(data)
+                    self.bufferes[sock_id] = b''
         else:
             message = struct.pack(
-                    '!HBQB',
-                    12,
+                    '!IBQB',
+                    14,
                     2,
                     sock_id,
                     code
             )
             self.transport.write(message)
+            self.closeSock(sock_id)
 
-    def sendRemote(self, message):
+    def sendRemote(self, message, total_length):
         """
         type 3:
         +-----+------+----+------+
         | LEN | TYPE | ID | DATA |
         +-----+------+----+------+
-        |  2  |   1  |  8 |      |
+        |  4  |   1  |  8 |      |
         +-----+------+----+------+
         """
-        sock_id, = struct.unpack('!Q', message[3:11])
-        data, = struct.unpack('!s', message[11:])
+        sock_id, = struct.unpack('!Q', message[5:13])
+        data_length = total_length - 13
+        data, = struct.unpack(f'!{data_length}s', message[13:total_length])
         try:
             sock = self.socks[sock_id]
         except KeyError:
@@ -160,9 +169,10 @@ class socks_dispatcher:
             except KeyError:
                 logger.error('receive unknown factory %u', sock_id)
             else:
-                if not factory.connected:
+                self.bufferes[sock_id] += data
+                if not self.connected[sock_id]:
                     logger.info(
-                            'reactor connect to %s:%u',
+                            'connect to %s:%u',
                             factory.host,
                             factory.port
                     )
@@ -171,8 +181,7 @@ class socks_dispatcher:
                             factory.port,
                             factory
                     )
-                    factory.connected = True
-                factory.buffer += data
+                    self.connected[sock_id] = True
         else:
             sock.transport.write(data)
 
@@ -182,18 +191,39 @@ class socks_dispatcher:
         +-----+------+----+------+
         | LEN | TYPE | ID | DATA |
         +-----+------+----+------+
-        |  2  |   1  |  8 |      |
+        |  4  |   1  |  8 |      |
         +-----+------+----+------+
         """
-        length = 11 + len(data)
+        data_length = len(data)
+        total_length = 13 + data_length
         message = struct.pack(
-                '!HBQs',
-                length,
+                f'!IBQ{data_length}s',
+                total_length,
                 4,
                 sock_id,
                 data
         )
+        logger.info(
+                'send message length=%d:%d',
+                total_length,
+                len(message)
+        )
         self.transport.write(message)
+
+    def closeSock(self, sock_id):
+        try:
+            sock = self.socks[sock_id]
+            del self.socks[sock_id]
+            del self.factories[sock_id]
+            del self.connected[sock_id]
+            del self.bufferes[sock_id]
+        except KeyError:
+            logger.error('close unknown sock %u', sock_id)
+        else:
+            try:
+                sock.transport.loseConnection()
+            except Exception:
+                pass
 
     def closeRemote(self, message):
         """
@@ -201,17 +231,11 @@ class socks_dispatcher:
         +-----+------+----+
         | LEN | TYPE | ID |
         +-----+------+----+
-        |  2  |   1  |  8 |
+        |  4  |   1  |  8 |
         +-----+------+----+
         """
-        sock_id, = struct.unpack('!Q', message[3:11])
-        try:
-            sock = self.socks[sock_id]
-        except KeyError:
-            logger.error('close unknown receive sock %u', sock_id)
-        else:
-            sock.transport.loseConnection()
-            del self.socks[sock_id]
+        sock_id, = struct.unpack('!Q', message[5:13])
+        self.closeSock(sock_id)
 
     def handleClose(self, sock_id):
         """
@@ -219,20 +243,17 @@ class socks_dispatcher:
         +-----+------+----+
         | LEN | TYPE | ID |
         +-----+------+----+
-        |  2  |   1  |  8 |
+        |  4  |   1  |  8 |
         +-----+------+----+
         """
         message = struct.pack(
-                '!HBQ',
-                11,
+                '!IBQ',
+                13,
                 6,
                 sock_id
         )
         self.transport.write(message)
-        try:
-            del self.socks[sock_id]
-        except KeyError:
-            logger.error('close unknown send sock %u', sock_id)
+        self.closeSock(sock_id)
 
 
 class socks5_protocol(protocol.Protocol):
@@ -246,12 +267,12 @@ class socks5_protocol(protocol.Protocol):
 
     def dataReceived(self, data):
         self.buffer += data
-        if len(self.buffer) < 2:
+        if len(self.buffer) < 4:
             return
-        length, = struct.unpack('!h', self.buffer[:2])
+        length, = struct.unpack('!I', self.buffer[:4])
         if len(self.buffer) < length:
             return
-        self.dispatcher.dispatchMessage(self.buffer)
+        self.dispatcher.dispatchMessage(self.buffer, length)
         self.buffer = self.buffer[length:]
 
 

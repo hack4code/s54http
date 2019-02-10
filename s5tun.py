@@ -32,7 +32,7 @@ _dns_server = client.createResolver(servers=[('127.0.0.1', 53)])
 _IP = re.compile(r'[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}')
 
 
-def verify_proxy(conn, x509, errno, errdepth, ok):
+def verify(conn, x509, errno, errdepth, ok):
     if not ok:
         cn = x509.get_subject().commonName
         logger.error(
@@ -53,12 +53,17 @@ class sock_remote_protocol(protocol.Protocol):
 
     def dataReceived(self, data):
         self.buffer += data
-        if len(self.buffer) < 2:
+        if len(self.buffer) < 4:
             return
-        length, = struct.unpack('!h', self.buffer[:2])
+        length, = struct.unpack('!I', self.buffer[:4])
+        logger.info(
+                'receive message length=%u:%u',
+                length,
+                len(self.buffer)
+        )
         if len(self.buffer) < length:
             return
-        self.dispatcher.dispatchMessage(self.buffer)
+        self.dispatcher.dispatchMessage(self.buffer, length)
         self.buffer = self.buffer[length:]
 
 
@@ -97,16 +102,20 @@ class socks_dispatcher:
         )
         self.socks = {}
 
-    def dispatchMessage(self, message):
-        type, = struct.unpack('!B', message[2:3])
+    def dispatchMessage(self, message, total_length):
+        type, = struct.unpack('!B', message[4:5])
+        logger.info(
+                'receive message type=%u, length=%u',
+                type,
+                total_length
+        )
+        assert type in (2, 4, 6)
         if 2 == type:
             self.handleConnect(message)
         elif 4 == type:
-            self.handleRemote(message)
+            self.handleRemote(message, total_length)
         elif 6 == type:
             self.handleClose(message)
-        else:
-            logger.error('unknown message type %u', type)
 
     def connectRemote(self, sock, remote_addr, remote_port):
         """
@@ -114,15 +123,15 @@ class socks_dispatcher:
         +-----+------+----+------+------+
         | LEN | TYPE | ID | ADDR | PORT |
         +-----+------+----+------+------+
-        |  2  |   1  |  8 |   4  |   2  |
+        |  4  |   1  |  8 |   4  |   2  |
         +-----+------+----+------+------+
         """
         sock_id = id(sock)
         self.socks[sock_id] = sock
         ip = [int(item) for item in remote_addr.split('.')]
         message = struct.pack(
-                '!HBQBBBBH',
-                17,
+                '!IBQBBBBH',
+                19,
                 1,
                 sock_id,
                 ip[0],
@@ -139,10 +148,10 @@ class socks_dispatcher:
         +-----+------+----+------+
         | LEN | TYPE | ID | CODE |
         +-----+------+----+------+
-        |  2  |   1  |  8 |   1  |
+        |  4  |   1  |  8 |   1  |
         +-----+------+----+------+
         """
-        sock_id, code = struct.unpack('!QB', message[3:12])
+        sock_id, code = struct.unpack('!QB', message[5:14])
         try:
             sock = self.socks[sock_id]
         except KeyError:
@@ -158,32 +167,46 @@ class socks_dispatcher:
         +-----+------+----+------+
         | LEN | TYPE | ID | DATA |
         +-----+------+----+------+
-        |  2  |   1  |  8 |      |
+        |  4  |   1  |  8 |      |
         +-----+------+----+------+
         """
         sock_id = id(sock)
-        length = 11 + len(data)
+        data_length = len(data)
+        total_length = 13 + data_length
         message = struct.pack(
-                '!HBQs',
-                length,
+                f'!IBQ{data_length}s',
+                total_length,
                 3,
                 sock_id,
                 data
         )
+        logger.info(
+                'send message length=%d:%u',
+                total_length,
+                len(message)
+        )
         self.transport.write(message)
 
-    def handleRemote(self, message):
+    def handleRemote(self, message, total_length):
         """
         type 4:
         +-----+------+----+------+
         | LEN | TYPE | ID | DATA |
         +-----+------+----+------+
-        |  2  |   1  |  8 |      |
+        |  4  |   1  |  8 |      |
         +-----+------+----+------+
         """
-        sock_id, data = struct.unpack('!Qs', message[3:])
-        sock = self.socks[sock_id]
-        sock.transport.write(data)
+        data_length = total_length - 13
+        sock_id, data = struct.unpack(
+                f'!Q{data_length}s',
+                message[5:total_length]
+        )
+        try:
+            sock = self.socks[sock_id]
+        except KeyError:
+            pass
+        else:
+            sock.transport.write(data)
 
     def closeRemote(self, sock):
         """
@@ -191,13 +214,13 @@ class socks_dispatcher:
         +-----+------+----+
         | LEN | TYPE | ID |
         +-----+------+----+
-        |  2  |   1  |  8 |
+        |  4  |   1  |  8 |
         +-----+------+----+
         """
         sock_id = id(sock)
         message = struct.pack(
-                '!HBQ',
-                11,
+                '!IBQ',
+                13,
                 5,
                 sock_id
         )
@@ -213,10 +236,10 @@ class socks_dispatcher:
         +-----+------+----+
         | LEN | TYPE | ID |
         +-----+------+----+
-        |  2  |   1  |  8 |
+        |  4  |   1  |  8 |
         +-----+------+----+
         """
-        sock_id, = struct.unpack('!Q', message[3:11])
+        sock_id, = struct.unpack('!Q', message[5:13])
         try:
             sock = self.socks[sock_id]
         except KeyError:
@@ -275,8 +298,8 @@ class sock_local_protocol(protocol.Protocol):
         self.sendHelloReply(0xFF)
         self.transport.loseConnection()
 
-    def sendHelloReply(self, code):
-        response = struct.pack('!BB', 5, code)
+    def sendHelloReply(self, rep):
+        response = struct.pack('!BB', 5, rep)
         self.transport.write(response)
 
     def waitConnectRemote(self, data):
@@ -297,10 +320,12 @@ class sock_local_protocol(protocol.Protocol):
             return
         if command != 1:
             logger.error('unsupported command %u', command)
+            self.sendConnectReply(7)
             self.transport.loseConnection()
             return
         if atyp not in (1, 3):
             logger.error('unsupported atyp %u', atyp)
+            self.sendConnectReply(8)
             self.transport.loseConnection()
             return
         if atyp == 1:
@@ -352,18 +377,21 @@ class sock_local_protocol(protocol.Protocol):
             logger.info('state: waitNameResolve')
             return
 
-    def sendConnectReply(self, code):
-        try:
-            addr = self.transport.getHost().host
-        except Exception:
-            logger.error('getHost error')
-            self.transport.loseConnection()
-            return
-        ip = [int(item) for item in addr.split('.')]
-        response = struct.pack('!BBBB', 5, code, 0, 1)
-        response += struct.pack('!BBBB', ip[0], ip[1], ip[2], ip[3])
-        response += struct.pack('!H', self.transport.getHost().port)
-        self.transport.write(response)
+    def sendConnectReply(self, rep):
+        logger.info('reply code %u', rep)
+        message = struct.pack(
+                '!BBBBBBBBH',
+                5,
+                rep,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0
+        )
+        self.transport.write(message)
 
     def waitNameResolve(self, data):
         logger.error('receive data when waitNameResolve')
@@ -387,6 +415,11 @@ class sock_local_protocol(protocol.Protocol):
         self.transport.loseConnection()
 
     def sendRemote(self, data):
+        logger.info(
+                'send data %s:%u',
+                self.remote_addr,
+                self.remote_port
+        )
         self.dispatcher.sendRemote(self, data)
 
 
@@ -411,7 +444,7 @@ def start_server(config):
             ca,
             key,
             cert,
-            verify_proxy
+            verify
     )
     dispatcher = socks_dispatcher(remote_addr, remote_port, ssl_ctx)
     local_factory = sock_local_factory(dispatcher)
