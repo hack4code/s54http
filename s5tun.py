@@ -93,6 +93,7 @@ class socks_dispatcher:
                 remote_factory,
                 ssl_ctx
         )
+        self.socks = {}
 
     def dispatchMessage(self, message):
         type = struct.unpack('!B', message[2:3])

@@ -210,11 +210,11 @@ class socks_dispatcher:
 class socks5_protocol(protocol.Protocol):
 
     def connectionMade(self):
-        self.buf = b''
+        self.buffer = b''
         self.dispatcher = socks_dispatcher(self.transport)
 
     def connectionLost(self, reason=None):
-        logger.info('connetion closed')
+        logger.info('client closed connection')
 
     def dataReceived(self, data):
         self.buffer += data
