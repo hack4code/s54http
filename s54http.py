@@ -83,7 +83,7 @@ class socks_dispatcher:
         self.transport = transport
 
     def dispatchMessage(self, message):
-        type = struct.unpack('!B', message[2:3])
+        type, = struct.unpack('!B', message[2:3])
         if 1 == type:
             self.connectRemote(message)
         elif 3 == type:
@@ -102,10 +102,10 @@ class socks_dispatcher:
         |  2  |   1  | 4  |   4  |   2  |
         +-----+------+----+------+------+
         """
-        sock_id = struct.unpack('!i', message[3:7])
+        sock_id, = struct.unpack('!i', message[3:7])
         ip = struct.unpack('!BBBB', message[7:11])
         host = '.'.join(str(item) for item in ip)
-        port = struct.unpack('!H', message[11:13])
+        port, = struct.unpack('!H', message[11:13])
         factory = remote_factory(self, sock_id)
         reactor.connectTCP(host, port, factory)
 
@@ -139,8 +139,8 @@ class socks_dispatcher:
         |  2  |   1  | 4  |      |
         +-----+------+----+------+
         """
-        sock_id = struct.unpack('!i', message[3:7])
-        data = struct.unpack('!s', message[7:])
+        sock_id, = struct.unpack('!i', message[3:7])
+        data, = struct.unpack('!s', message[7:])
         try:
             sock = self.socks[sock_id]
         except KeyError:
@@ -176,7 +176,7 @@ class socks_dispatcher:
         |  2  |   1  |  4 |
         +-----+------+----+
         """
-        sock_id = struct.unpack('!i', message[3:7])
+        sock_id, = struct.unpack('!i', message[3:7])
         try:
             sock = self.socks[sock_id]
         except KeyError:
@@ -220,7 +220,7 @@ class socks5_protocol(protocol.Protocol):
         self.buffer += data
         if len(self.buffer) < 2:
             return
-        length = struct.unpack('!h', self.buffer[:2])
+        length, = struct.unpack('!h', self.buffer[:2])
         if len(self.buffer) < length:
             return
         self.dispatcher.dispatchMessage(self.buffer)

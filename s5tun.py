@@ -55,9 +55,11 @@ class sock_remote_protocol(protocol.Protocol):
         self.buffer += data
         if len(self.buffer) < 2:
             return
-        length = struct.unpack('!h', self.buffer[:2])
+        length, = struct.unpack('!h', self.buffer[:2])
         if len(self.buffer) < length:
             return
+        self.dispatcher.dispatchMessage(self.buffer)
+        self.buffer = self.buffer[length:]
 
 
 class sock_remote_factory(protocol.ClientFactory):
@@ -96,7 +98,7 @@ class socks_dispatcher:
         self.socks = {}
 
     def dispatchMessage(self, message):
-        type = struct.unpack('!B', message[2:3])
+        type, = struct.unpack('!B', message[2:3])
         if 2 == type:
             self.handleConnect(message)
         elif 4 == type:
@@ -212,7 +214,7 @@ class socks_dispatcher:
         |  2  |   1  |  4 |
         +-----+------+----+
         """
-        sock_id = struct.unpack('!i')
+        sock_id, = struct.unpack('!i')
         try:
             sock = self.socks[sock_id]
         except KeyError:
