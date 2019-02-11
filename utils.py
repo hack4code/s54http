@@ -97,6 +97,9 @@ class ssl_ctx_factory:
         if self._ctx is None:
             ctx = ssl.Context(ssl.TLSv1_2_METHOD)
             ctx.set_options(ssl.OP_NO_SSLv2)
+            ctx.set_options(ssl.OP_NO_SSLv3)
+            ctx.set_options(ssl.OP_NO_TLSv1)
+            ctx.set_options(ssl.OP_NO_TLSv1_1)
             ctx.use_certificate_file(self._cert)
             ctx.use_privatekey_file(self._key)
             ctx.check_privatekey()
