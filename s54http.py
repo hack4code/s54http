@@ -9,13 +9,14 @@ from twisted.names import client, dns
 from twisted.internet import reactor, protocol
 
 from utils import (
-        daemonize, parse_args, ssl_ctx_factory, init_logger,
+        daemonize, parse_args, ssl_ctx_factory, init_logger, cache
 )
 
 
 logger = logging.getLogger(__name__)
 
-_dns_server = client.createResolver(servers=[('8.8.8.8', 53)])
+_name_cache = cache()
+_name_server = client.createResolver(servers=[('8.8.8.8', 53)])
 _IP = re.compile(r'[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}')
 
 
@@ -131,35 +132,41 @@ class socks_dispatcher:
         if _IP.match(host):
             self.resolved[sock_id] = (host, port)
         else:
-            self.resolved[sock_id] = None
+            try:
+                self.resolved[sock_id] = (_name_cache[host], port)
+            except KeyError:
+                self.resolved[sock_id] = None
 
-            d = _dns_server.lookupAddress(host)
+                d = _name_server.lookupAddress(host)
 
-            def resolve_ok(records, sock_id, host, port, dispatcher):
-                if sock_id not in dispatcher.connected:
-                    logger.info('sock_id %u closed at name resolving', sock_id)
-                    return
-                answers, *_ = records
-                for answer in answers:
-                    if answer.type != dns.A:
-                        continue
-                    addr = answer.payload.dottedQuad()
-                    dispatcher.resolved[sock_id] = (addr, port)
-                    if (len(dispatcher.bufferes[sock_id]) > 0 and
-                            not dispatcher.connected[sock_id]):
-                        dispatcher._realConnectRemote(sock_id)
-                    break
-                else:
-                    logger.error('no ip4 address found[%s]', host)
+                def resolve_ok(records, sock_id, host, port, dispatcher):
+                    if sock_id not in dispatcher.connected:
+                        logger.info(
+                                'sock_id %u closed at name resolving',
+                                sock_id
+                        )
+                        return
+                    answers, *_ = records
+                    for answer in answers:
+                        if answer.type != dns.A:
+                            continue
+                        addr = answer.payload.dottedQuad()
+                        dispatcher.resolved[sock_id] = (addr, port)
+                        if (len(dispatcher.bufferes[sock_id]) > 0 and
+                                not dispatcher.connected[sock_id]):
+                            dispatcher._realConnectRemote(sock_id)
+                        break
+                    else:
+                        logger.error('no ip4 address found[%s]', host)
+                        dispatcher.handleConnect(sock_id, 1)
+
+                d.addCallback(resolve_ok, sock_id, host, port, self)
+
+                def resolve_err(res, sock_id, host, port, dispatcher):
+                    logger.error('resolve host failed[%s]', host)
                     dispatcher.handleConnect(sock_id, 1)
 
-            d.addCallback(resolve_ok, sock_id, host, port, self)
-
-            def resolve_err(res, sock_id, host, port, dispatcher):
-                logger.error('resolve host failed[%s]', host)
-                dispatcher.handleConnect(sock_id, 1)
-
-            d.addErrback(resolve_err, sock_id, host, port, self)
+                d.addErrback(resolve_err, sock_id, host, port, self)
 
     def handleConnect(self, sock_id, code, *, sock=None):
         """

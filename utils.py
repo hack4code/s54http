@@ -13,6 +13,15 @@ from collections import OrderedDict
 from OpenSSL import SSL as ssl
 
 
+__all__ = [
+        'daemonize',
+        'cache',
+        'ssl_ctx_factory',
+        'init_logger',
+        'parse_args',
+]
+
+
 def daemonize(pidfile, *,
               stdin='/dev/null',
               stdout='/dev/null',
@@ -59,16 +68,16 @@ def daemonize(pidfile, *,
     signal.signal(signal.SIGTERM, sigterm_handler)
 
 
-class dns_cache(OrderedDict):
+class cache(OrderedDict):
 
     def __init__(self, limit=1024):
-        super(dns_cache, self).__init__()
+        super(cache, self).__init__()
         self.limit = limit
 
     def __setitem__(self, key, value):
         while len(self) >= self.limit:
             self.popitem(last=False)
-        super(dns_cache, self).__setitem__(key, value)
+        super(cache, self).__setitem__(key, value)
 
 
 class ssl_ctx_factory:
