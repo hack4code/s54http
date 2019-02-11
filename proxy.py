@@ -10,6 +10,8 @@ from utils import (
         daemonize, parse_args, ssl_ctx_factory, init_logger
 )
 
+
+_SOCK_ID = 0
 config = {
         'daemon': False,
         'saddr': '',
@@ -22,8 +24,6 @@ config = {
         'logfile': 'socks.log',
         'loglevel': 'DEBUG'
 }
-
-
 logger = logging.getLogger(__name__)
 
 
@@ -36,6 +36,13 @@ def verify(conn, x509, errno, errdepth, ok):
                 cn
         )
     return ok
+
+
+def next_sock_id():
+    global _SOCK_ID
+
+    _SOCK_ID = _SOCK_ID + 1
+    return _SOCK_ID
 
 
 class tunnel_protocol(protocol.Protocol):
@@ -94,11 +101,6 @@ class socks_dispatcher:
 
     def dispatchMessage(self, message):
         type, = struct.unpack('!B', message[4:5])
-        logger.debug(
-                'receive message type=%u length=%u',
-                type,
-                len(message)
-        )
         if 2 == type:
             self.handleConnect(message)
         elif 4 == type:
@@ -112,7 +114,7 @@ class socks_dispatcher:
         try:
             sock = self.socks[sock_id]
         except KeyError:
-            logger.error('close closed sock_id %u', sock_id)
+            logger.error('close closed sock_id[%u]', sock_id)
         else:
             sock.transport.loseConnection()
             del self.socks[sock_id]
@@ -126,16 +128,16 @@ class socks_dispatcher:
         |  4  |   1  |  8 |      |   2  |
         +-----+------+----+------+------+
         """
-        sock_id = id(sock)
+        sock_id = sock.sock_id
         self.socks[sock_id] = sock
         host_length = len(host)
         total_length = 15 + host_length
         logger.debug(
-                'send message type=%u host=%s port=%u sock_id=%u',
+                'sock_id[%u] connect %s:%u',
                 1,
+                sock_id,
                 host,
                 port,
-                sock_id
         )
         message = struct.pack(
                 f'!IBQ{host_length}sH',
@@ -159,7 +161,7 @@ class socks_dispatcher:
         sock_id, code = struct.unpack('!QB', message[5:14])
         if 0 == code:
             return
-        logger.info('sock_id %u connect remote failed', sock_id)
+        logger.info('sock_id[%u] connect failed', sock_id)
         self.closeSock(sock_id)
 
     def sendRemote(self, sock, data):
@@ -171,7 +173,7 @@ class socks_dispatcher:
         |  4  |   1  |  8 |      |
         +-----+------+----+------+
         """
-        sock_id = id(sock)
+        sock_id = sock.sock_id
         total_length = 13 + len(data)
         header = struct.pack(
                 f'!IBQ',
@@ -195,11 +197,7 @@ class socks_dispatcher:
         try:
             sock = self.socks[sock_id]
         except KeyError:
-            logger.error(
-                'receive message type=%u for closed sock_id %u',
-                4,
-                sock_id
-            )
+            logger.error('receive data for closed sock_id[%u]', sock_id)
         else:
             sock.transport.write(message[13:])
 
@@ -212,10 +210,10 @@ class socks_dispatcher:
         |  4  |   1  |  8 |
         +-----+------+----+
         """
-        sock_id = id(sock)
+        sock_id = sock.sock_id
         if sock_id not in self.socks:
             return
-        logger.info('sock_id %u local closed', sock_id)
+        logger.info('sock_id[%u] local closed', sock_id)
         self.closeSock(sock_id)
         message = struct.pack(
                 '!IBQ',
@@ -235,7 +233,7 @@ class socks_dispatcher:
         +-----+------+----+
         """
         sock_id, = struct.unpack('!Q', message[5:13])
-        logger.info('sock_id %u remote closed', sock_id)
+        logger.info('sock_id[%u] remote closed', sock_id)
         self.closeSock(sock_id)
 
 
@@ -247,13 +245,13 @@ class socks5_protocol(protocol.Protocol):
         self.buffer = None
         self.state = None
         self.dispatcher = None
+        self.sock_id = next_sock_id()
 
     def connectionMade(self):
         self.state = 'waitHello'
         self.buffer = b''
 
     def connectionLost(self, reason=None):
-        logger.info('local connection closed')
         self.dispatcher.closeRemote(self)
 
     def dataReceived(self, data):
@@ -281,7 +279,6 @@ class socks5_protocol(protocol.Protocol):
             if method == 0:
                 self.buffer = b''
                 self.state = 'waitConnectRemote'
-                logger.info('state: waitConnectRemote')
                 self.sendHelloReply(0)
                 return
         self.sendHelloReply(0xFF)
@@ -357,12 +354,6 @@ class socks5_protocol(protocol.Protocol):
         self.state = 'sendRemote'
 
     def sendRemote(self, data):
-        logger.debug(
-                'send remote %s:%u length=%u',
-                self.remote_host,
-                self.remote_port,
-                len(data)
-        )
         self.dispatcher.sendRemote(self, data)
 
 

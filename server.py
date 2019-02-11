@@ -96,7 +96,11 @@ class sock_proxy:
             self.connectRemote()
 
     def resolveErr(self):
-        logger.error('resolve host failed[%s]', self.host)
+        logger.error(
+                'sock_id[%u] resolve host[%s] failed',
+                self.sock_id,
+                self.host
+        )
         self.dispatcher.handleConnect(self.sock_id, 1)
 
     def setAddr(self, host):
@@ -135,7 +139,8 @@ class sock_proxy:
 
     def connectErr(self, message):
         logger.error(
-                'connect %s:%u failed[%s]',
+                'sock_id[%u] connect %s:%u failed[%s]',
+                self.sock_id,
                 self.host,
                 self.port,
                 message
@@ -155,7 +160,8 @@ class sock_proxy:
 
     def connectClosed(self):
         logger.info(
-                'connection to %s:%u closed',
+                'sock_id[%u] connection[%s:%u] closed',
+                self.sock_id,
                 self.host,
                 self.port
         )
@@ -174,11 +180,6 @@ class socks_dispatcher:
 
     def dispatchMessage(self, message):
         type, = struct.unpack('!B', message[4:5])
-        logger.debug(
-                'receive message type=%u length=%u',
-                type,
-                len(message)
-        )
         if 1 == type:
             self.connectRemote(message)
         elif 3 == type:
@@ -200,6 +201,12 @@ class socks_dispatcher:
         sock_id, = struct.unpack('!Q', message[5:13])
         host = message[13:-2].tobytes().decode('utf-8').strip()
         port, = struct.unpack('!H', message[-2:])
+        logger.debug(
+                'sock_id[%u] connect %s:%u',
+                sock_id,
+                host,
+                port
+        )
         assert sock_id not in self.socks
         self.socks[sock_id] = sock_proxy(sock_id, self, host, port)
 
@@ -238,7 +245,7 @@ class socks_dispatcher:
         try:
             sock = self.socks[sock_id]
         except KeyError:
-            logger.error('send data to closed sock_id %u', sock_id)
+            logger.error('send data to closed sock_id[%u]', sock_id)
         else:
             sock.sendRemote(data)
 
@@ -265,7 +272,7 @@ class socks_dispatcher:
         try:
             sock = self.socks[sock_id]
         except KeyError:
-            logger.error('close closed sock_id %u', sock_id)
+            logger.error('close closed sock_id[%u]', sock_id)
         else:
             sock.close()
             del self.socks[sock_id]
@@ -280,6 +287,7 @@ class socks_dispatcher:
         +-----+------+----+
         """
         sock_id, = struct.unpack('!Q', message[5:13])
+        logger.info('sock_id[%u] remote closed', sock_id)
         self.closeSock(sock_id)
 
     def handleClose(self, sock_id):
@@ -293,6 +301,7 @@ class socks_dispatcher:
         """
         if sock_id not in self.socks:
             return
+        logger.info('sock_id[%u] local closed', sock_id)
         self.closeSock(sock_id)
         message = struct.pack(
                 '!IBQ',
