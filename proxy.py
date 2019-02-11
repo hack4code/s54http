@@ -20,7 +20,7 @@ config = {
         'cert': 'keys/client.crt',
         'pidfile': 'socks.pid',
         'logfile': 'socks.log',
-        'loglevel': 'INFO'
+        'loglevel': 'DEBUG'
 }
 
 

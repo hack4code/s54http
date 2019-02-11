@@ -162,7 +162,8 @@ class sock_proxy:
         self.dispatcher.handleClose(self.sock_id)
 
     def close(self):
-        self.transport.loseConnection()
+        if self.transport:
+            self.transport.loseConnection()
 
 
 class socks_dispatcher:
@@ -336,6 +337,7 @@ def start_server(config):
             verify
     )
     reactor.listenSSL(port, factory, ssl_ctx)
+    logger.info('server start running...')
     reactor.run()
 
 
