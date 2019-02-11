@@ -1,9 +1,11 @@
 #! /usr/bin/env python
 
 
+import re
 import struct
 import logging
 
+from twisted.names import client, dns
 from twisted.internet import reactor, protocol
 
 from utils import (
@@ -12,6 +14,9 @@ from utils import (
 
 
 logger = logging.getLogger(__name__)
+
+_dns_server = client.createResolver(servers=[('8.8.8.8', 53)])
+_IP = re.compile(r'[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}')
 
 
 config = {
@@ -36,11 +41,6 @@ def verify(conn, x509, errno, errdepth, ok):
 class remote_protocol(protocol.Protocol):
 
     def connectionMade(self):
-        logger.info(
-                'connect success %s:%u',
-                self.factory.host,
-                self.factory.port
-        )
         self.dispatcher.handleConnect(
                 self.sock_id,
                 0,
@@ -53,18 +53,15 @@ class remote_protocol(protocol.Protocol):
 
 class remote_factory(protocol.ClientFactory):
 
-    def __init__(self, dispatcher, sock_id, host, port):
+    def __init__(self, dispatcher, sock_id):
         self.protocol = remote_protocol
         self.dispatcher = dispatcher
         self.sock_id = sock_id
-        self.host = host
-        self.port = port
 
     def buildProtocol(self, addr):
         p = protocol.ClientFactory.buildProtocol(self, addr)
         p.dispatcher = self.dispatcher
         p.sock_id = self.sock_id
-        p.factory = self
         return p
 
     def clientConnectionFailed(self, connector, reason):
@@ -72,7 +69,6 @@ class remote_factory(protocol.ClientFactory):
         self.dispatcher.handleConnect(self.sock_id, 1)
 
     def clientConnectionLost(self, connector, reason):
-        logger.info('connetion closed[%s]', reason.getErrorMessage())
         self.dispatcher.handleClose(self.sock_id)
 
 
@@ -80,14 +76,14 @@ class socks_dispatcher:
 
     def __init__(self, transport):
         self.socks = {}
-        self.factories = {}
         self.bufferes = {}
         self.connected = {}
+        self.resolved = {}
         self.transport = transport
 
     def dispatchMessage(self, message, total_length):
         type, = struct.unpack('!B', message[4:5])
-        logger.info(
+        logger.debug(
                 'receive message type=%u length=%u',
                 type,
                 total_length
@@ -100,24 +96,70 @@ class socks_dispatcher:
         elif 5 == type:
             self.closeRemote(message)
 
+    def _existedSock(self, sock_id):
+        return sock_id in self.connected
+
+    def _realConnectRemote(self, sock_id):
+        addr, port = self.resolved[sock_id]
+        factory = remote_factory(self, sock_id)
+        reactor.connectTCP(
+                addr,
+                port,
+                factory
+        )
+        self.connected[sock_id] = True
+
     def connectRemote(self, message):
         """
         type 1:
         +-----+------+----+------+------+
-        | LEN | TYPE | ID | ADDR | PORT |
+        | LEN | TYPE | ID | HOST | PORT |
         +-----+------+----+------+------+
-        |  4  |   1  |  8 |   4  |   2  |
+        |  4  |   1  |  8 |      |   2  |
         +-----+------+----+------+------+
         """
         sock_id, = struct.unpack('!Q', message[5:13])
-        assert sock_id not in self.socks
-        ip = struct.unpack('!BBBB', message[13:17])
-        host = f'{ip[0]}.{ip[1]}.{ip[2]}.{ip[3]}'
-        port, = struct.unpack('!H', message[17:19])
-        logger.info('connect to %s:%d', host, port)
-        self.factories[sock_id] = remote_factory(self, sock_id, host, port)
+
+        if self._existedSock(sock_id):
+            logger.error('sock_id %u connect again', sock_id)
+            return
+
         self.connected[sock_id] = False
         self.bufferes[sock_id] = b''
+        host = message[13:-2].tobytes().decode('utf-8').strip()
+        port, = struct.unpack('!H', message[-2:])
+        if _IP.match(host):
+            self.resolved[sock_id] = (host, port)
+        else:
+            self.resolved[sock_id] = None
+
+            d = _dns_server.lookupAddress(host)
+
+            def resolve_ok(records, sock_id, host, port, dispatcher):
+                if sock_id not in dispatcher.connected:
+                    logger.info('sock_id %u closed at name resolving', sock_id)
+                    return
+                answers, *_ = records
+                for answer in answers:
+                    if answer.type != dns.A:
+                        continue
+                    addr = answer.payload.dottedQuad()
+                    dispatcher.resolved[sock_id] = (addr, port)
+                    if (len(dispatcher.bufferes[sock_id]) > 0 and
+                            not dispatcher.connected[sock_id]):
+                        dispatcher._realConnectRemote(sock_id)
+                    break
+                else:
+                    logger.error('no ip4 address found[%s]', host)
+                    dispatcher.handleConnect(sock_id, 1)
+
+            d.addCallback(resolve_ok, sock_id, host, port, self)
+
+            def resolve_err(res, sock_id, host, port, dispatcher):
+                logger.error('resolve host failed[%s]', host)
+                dispatcher.handleConnect(sock_id, 1)
+
+            d.addErrback(resolve_err, sock_id, host, port, self)
 
     def handleConnect(self, sock_id, code, *, sock=None):
         """
@@ -130,15 +172,12 @@ class socks_dispatcher:
         """
         if code == 0:
             self.socks[sock_id] = sock
-            try:
-                data = self.bufferes[sock_id]
-            except KeyError:
-                pass
-            else:
-                if len(data) > 0:
-                    sock.transport.write(data)
-                    self.bufferes[sock_id] = b''
+            data = self.bufferes[sock_id]
+            if len(data) > 0:
+                sock.transport.write(data)
+                self.bufferes[sock_id] = b''
         else:
+            self.closeSock(sock_id)
             message = struct.pack(
                     '!IBQB',
                     14,
@@ -147,7 +186,6 @@ class socks_dispatcher:
                     code
             )
             self.transport.write(message)
-            self.closeSock(sock_id)
 
     def sendRemote(self, message, total_length):
         """
@@ -159,29 +197,20 @@ class socks_dispatcher:
         +-----+------+----+------+
         """
         sock_id, = struct.unpack('!Q', message[5:13])
-        data_length = total_length - 13
-        data, = struct.unpack(f'!{data_length}s', message[13:total_length])
+        if not self._existedSock(sock_id):
+            logger.error(
+                'receive message type=%u for closed sock_id %u',
+                3,
+                sock_id
+            )
+            return
+        data = message[13:]
         try:
             sock = self.socks[sock_id]
         except KeyError:
-            try:
-                factory = self.factories[sock_id]
-            except KeyError:
-                logger.error('receive unknown factory %u', sock_id)
-            else:
-                self.bufferes[sock_id] += data
-                if not self.connected[sock_id]:
-                    logger.info(
-                            'connect to %s:%u',
-                            factory.host,
-                            factory.port
-                    )
-                    reactor.connectTCP(
-                            factory.host,
-                            factory.port,
-                            factory
-                    )
-                    self.connected[sock_id] = True
+            self.bufferes[sock_id] += data
+            if not self.connected[sock_id] and self.resolved[sock_id]:
+                self._realConnectRemote(sock_id)
         else:
             sock.transport.write(data)
 
@@ -194,36 +223,26 @@ class socks_dispatcher:
         |  4  |   1  |  8 |      |
         +-----+------+----+------+
         """
-        data_length = len(data)
-        total_length = 13 + data_length
-        message = struct.pack(
-                f'!IBQ{data_length}s',
+        total_length = 13 + len(data)
+        header = struct.pack(
+                f'!IBQ',
                 total_length,
                 4,
                 sock_id,
-                data
         )
-        logger.info(
-                'send message length=%d:%d',
-                total_length,
-                len(message)
-        )
-        self.transport.write(message)
+        self.transport.write(header)
+        self.transport.write(data)
 
     def closeSock(self, sock_id):
         try:
             sock = self.socks[sock_id]
             del self.socks[sock_id]
-            del self.factories[sock_id]
+            del self.resolved[sock_id]
             del self.connected[sock_id]
             del self.bufferes[sock_id]
+            sock.transport.loseConnection()
         except KeyError:
-            logger.error('close unknown sock %u', sock_id)
-        else:
-            try:
-                sock.transport.loseConnection()
-            except Exception:
-                pass
+            logger.error('close closed sock_id %u', sock_id)
 
     def closeRemote(self, message):
         """
@@ -246,6 +265,9 @@ class socks_dispatcher:
         |  4  |   1  |  8 |
         +-----+------+----+
         """
+        if not self._existedSock(sock_id):
+            return
+        self.closeSock(sock_id)
         message = struct.pack(
                 '!IBQ',
                 13,
@@ -253,7 +275,6 @@ class socks_dispatcher:
                 sock_id
         )
         self.transport.write(message)
-        self.closeSock(sock_id)
 
 
 class socks5_protocol(protocol.Protocol):
@@ -272,7 +293,8 @@ class socks5_protocol(protocol.Protocol):
         length, = struct.unpack('!I', self.buffer[:4])
         if len(self.buffer) < length:
             return
-        self.dispatcher.dispatchMessage(self.buffer, length)
+        message = memoryview(self.buffer)
+        self.dispatcher.dispatchMessage(message, length)
         self.buffer = self.buffer[length:]
 
 
