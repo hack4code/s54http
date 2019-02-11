@@ -38,7 +38,7 @@ def verify(conn, x509, errno, errdepth, ok):
     return ok
 
 
-class sock_remote_protocol(protocol.Protocol):
+class tunnel_protocol(protocol.Protocol):
 
     def __init__(self):
         self.buffer = b''
@@ -54,14 +54,14 @@ class sock_remote_protocol(protocol.Protocol):
         if len(self.buffer) < length:
             return
         message = memoryview(self.buffer)
-        self.dispatcher.dispatchMessage(message, length)
+        self.dispatcher.dispatchMessage(message[:length])
         self.buffer = self.buffer[length:]
 
 
-class sock_remote_factory(protocol.ClientFactory):
+class tunnel_factory(protocol.ClientFactory):
 
     def __init__(self, dispatcher):
-        self.protocol = sock_remote_protocol
+        self.protocol = tunnel_protocol
         self.dispatcher = dispatcher
 
     def buildProtocol(self, addr):
@@ -82,33 +82,31 @@ class sock_remote_factory(protocol.ClientFactory):
 
 class socks_dispatcher:
 
-    def __init__(self, remote_addr, remote_port, ssl_ctx):
-        remote_factory = sock_remote_factory(self)
+    def __init__(self, addr, port, ssl_ctx):
+        factory = tunnel_factory(self)
         reactor.connectSSL(
-                remote_addr,
-                remote_port,
-                remote_factory,
+                addr,
+                port,
+                factory,
                 ssl_ctx
         )
         self.socks = {}
 
-    def dispatchMessage(self, message, total_length):
+    def dispatchMessage(self, message):
         type, = struct.unpack('!B', message[4:5])
         logger.debug(
                 'receive message type=%u length=%u',
                 type,
-                total_length
+                len(message)
         )
-        assert type in (2, 4, 6)
         if 2 == type:
             self.handleConnect(message)
         elif 4 == type:
-            self.handleRemote(message, total_length)
+            self.handleRemote(message)
         elif 6 == type:
             self.handleClose(message)
-
-    def _existedSock(self, sock_id):
-        return sock_id in self.socks
+        else:
+            logger.error('receive unknown message type=%u', type)
 
     def closeSock(self, sock_id):
         try:
@@ -159,17 +157,9 @@ class socks_dispatcher:
         +-----+------+----+------+
         """
         sock_id, code = struct.unpack('!QB', message[5:14])
-        if not self._existedSock(sock_id):
-            logger.error('handleConnect unknown sock_id %u', sock_id)
-            return
-        sock = self.socks[sock_id]
         if 0 == code:
             return
-        logger.error(
-                'connect failed %s:%d',
-                sock.remote_host,
-                sock.remote_port
-        )
+        logger.info('sock_id %u connect remote failed', sock_id)
         self.closeSock(sock_id)
 
     def sendRemote(self, sock, data):
@@ -192,7 +182,7 @@ class socks_dispatcher:
         self.transport.write(header)
         self.transport.write(data)
 
-    def handleRemote(self, message, total_length):
+    def handleRemote(self, message):
         """
         type 4:
         +-----+------+----+------+
@@ -223,7 +213,7 @@ class socks_dispatcher:
         +-----+------+----+
         """
         sock_id = id(sock)
-        if not self._existedSock(sock_id):
+        if sock_id not in self.socks:
             return
         logger.info('sock_id %u local closed', sock_id)
         self.closeSock(sock_id)
@@ -249,7 +239,7 @@ class socks_dispatcher:
         self.closeSock(sock_id)
 
 
-class sock_local_protocol(protocol.Protocol):
+class socks5_protocol(protocol.Protocol):
 
     def __init__(self):
         self.remote_host = None
@@ -358,9 +348,6 @@ class sock_local_protocol(protocol.Protocol):
         )
         self.transport.write(message)
 
-    def waitNameResolve(self, data):
-        logger.error('receive data at waitNameResolve')
-
     def connectRemote(self, host, port):
         self.remote_host = host
         self.remote_port = port
@@ -379,10 +366,10 @@ class sock_local_protocol(protocol.Protocol):
         self.dispatcher.sendRemote(self, data)
 
 
-class sock_local_factory(protocol.ServerFactory):
+class socks5_factory(protocol.ServerFactory):
 
     def __init__(self, dispatcher):
-        self.protocol = sock_local_protocol
+        self.protocol = socks5_protocol
         self.dispatcher = dispatcher
 
     def buildProtocol(self, addr):
@@ -403,7 +390,7 @@ def start_server(config):
             verify
     )
     dispatcher = socks_dispatcher(remote_addr, remote_port, ssl_ctx)
-    local_factory = sock_local_factory(dispatcher)
+    local_factory = socks5_factory(dispatcher)
     reactor.listenTCP(
             local_port,
             local_factory,
