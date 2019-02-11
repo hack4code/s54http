@@ -22,7 +22,7 @@ config = {
         'cert': 'keys/client.crt',
         'pidfile': 'socks.pid',
         'logfile': 'socks.log',
-        'loglevel': 'DEBUG'
+        'loglevel': 'INFO'
 }
 logger = logging.getLogger(__name__)
 
@@ -134,9 +134,8 @@ class socks_dispatcher:
         total_length = 15 + host_length
         logger.debug(
                 'sock_id[%u] connect %s:%u',
-                1,
                 sock_id,
-                host,
+                host.decode('utf-8'),
                 port,
         )
         message = struct.pack(
