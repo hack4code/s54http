@@ -248,6 +248,7 @@ class SocksDispatcher:
             sock = self.socks[sock_id]
         except KeyError:
             logger.error('send data to closed sock_id[%u]', sock_id)
+            self.sendClose(sock_id)
         else:
             sock.sendRemote(data)
 
@@ -292,6 +293,15 @@ class SocksDispatcher:
         logger.info('sock_id[%u] remote closed', sock_id)
         self.closeSock(sock_id)
 
+    def sendClose(self, sock_id):
+        message = struct.pack(
+                '!IBQ',
+                13,
+                6,
+                sock_id
+        )
+        self.transport.write(message)
+
     def handleClose(self, sock_id):
         """
         type 6:
@@ -305,13 +315,7 @@ class SocksDispatcher:
             return
         logger.info('sock_id[%u] local closed', sock_id)
         self.closeSock(sock_id)
-        message = struct.pack(
-                '!IBQ',
-                13,
-                6,
-                sock_id
-        )
-        self.transport.write(message)
+        self.sendClose(sock_id)
 
 
 class TunnelProtocol(protocol.Protocol):
