@@ -1,4 +1,5 @@
 #! /usr/bin/env python
+# -*- coding: utf-8 -*-
 
 
 import re
@@ -9,13 +10,14 @@ from twisted.names import client, dns
 from twisted.internet import reactor, protocol
 
 from utils import (
-        daemonize, parse_args, ssl_ctx_factory, init_logger, cache
+        SSLCtxFactory, Cache,
+        daemonize, parse_args, init_logger,
 )
 
 
 logger = logging.getLogger(__name__)
 
-_name_cache = cache()
+_name_cache = Cache()
 _name_server = client.createResolver(servers=[('8.8.8.8', 53)])
 _IP = re.compile(r'[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}')
 
@@ -39,7 +41,7 @@ def verify(conn, x509, errno, errdepth, ok):
     return ok
 
 
-class remote_protocol(protocol.Protocol):
+class RemoteProtocol(protocol.Protocol):
 
     def connectionMade(self):
         self.proxy.connectOk(self.transport)
@@ -48,10 +50,10 @@ class remote_protocol(protocol.Protocol):
         self.proxy.recvRemote(data)
 
 
-class remote_factory(protocol.ClientFactory):
+class RemoteFactory(protocol.ClientFactory):
 
     def __init__(self, proxy):
-        self.protocol = remote_protocol
+        self.protocol = RemoteProtocol
         self.proxy = proxy
 
     def buildProtocol(self, addr):
@@ -67,7 +69,7 @@ class remote_factory(protocol.ClientFactory):
         self.proxy.connectClosed()
 
 
-class sock_proxy:
+class SockProxy:
 
     def __init__(self, sock_id, dispatcher, host, port):
         self.sock_id = sock_id
@@ -82,7 +84,7 @@ class sock_proxy:
 
     def connectRemote(self):
         assert self.addr
-        factory = remote_factory(self)
+        factory = RemoteFactory(self)
         reactor.connectTCP(
                 self.addr,
                 self.port,
@@ -172,7 +174,7 @@ class sock_proxy:
             self.transport.loseConnection()
 
 
-class socks_dispatcher:
+class SocksDispatcher:
 
     def __init__(self, transport):
         self.socks = {}
@@ -208,7 +210,7 @@ class socks_dispatcher:
                 port
         )
         assert sock_id not in self.socks
-        self.socks[sock_id] = sock_proxy(sock_id, self, host, port)
+        self.socks[sock_id] = SockProxy(sock_id, self, host, port)
 
     def handleConnect(self, sock_id, code):
         """
@@ -312,11 +314,11 @@ class socks_dispatcher:
         self.transport.write(message)
 
 
-class tunnel_protocol(protocol.Protocol):
+class TunnelProtocol(protocol.Protocol):
 
     def connectionMade(self):
         self.buffer = b''
-        self.dispatcher = socks_dispatcher(self.transport)
+        self.dispatcher = SocksDispatcher(self.transport)
 
     def connectionLost(self, reason=None):
         logger.info('proxy closed connection')
@@ -328,8 +330,8 @@ class tunnel_protocol(protocol.Protocol):
         length, = struct.unpack('!I', self.buffer[:4])
         if len(self.buffer) < length:
             return
-        message = memoryview(self.buffer)
-        self.dispatcher.dispatchMessage(message[:length])
+        message = memoryview(self.buffer)[:length]
+        self.dispatcher.dispatchMessage(message)
         self.buffer = self.buffer[length:]
 
 
@@ -337,8 +339,8 @@ def start_server(config):
     port = config['port']
     ca, key, cert = config['ca'], config['key'], config['cert']
     factory = protocol.ServerFactory()
-    factory.protocol = tunnel_protocol
-    ssl_ctx = ssl_ctx_factory(
+    factory.protocol = TunnelProtocol
+    ssl_ctx = SSLCtxFactory(
             False,
             ca,
             key,

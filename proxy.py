@@ -1,4 +1,5 @@
 #! /usr/bin/env python
+# -*- coding: utf-8 -*-
 
 
 import struct
@@ -7,11 +8,11 @@ import logging
 from twisted.internet import reactor, protocol
 
 from utils import (
-        daemonize, parse_args, ssl_ctx_factory, init_logger
+        SSLCtxFactory,
+        daemonize, parse_args, init_logger
 )
 
 
-_SOCK_ID = 0
 config = {
         'daemon': False,
         'saddr': '',
@@ -25,6 +26,8 @@ config = {
         'loglevel': 'INFO'
 }
 logger = logging.getLogger(__name__)
+
+_SOCK_ID = 0
 
 
 def verify(conn, x509, errno, errdepth, ok):
@@ -45,7 +48,7 @@ def next_sock_id():
     return _SOCK_ID
 
 
-class tunnel_protocol(protocol.Protocol):
+class TunnelProtocol(protocol.Protocol):
 
     def __init__(self):
         self.buffer = b''
@@ -65,10 +68,10 @@ class tunnel_protocol(protocol.Protocol):
         self.buffer = self.buffer[length:]
 
 
-class tunnel_factory(protocol.ClientFactory):
+class TunnelFactory(protocol.ClientFactory):
 
     def __init__(self, dispatcher):
-        self.protocol = tunnel_protocol
+        self.protocol = TunnelProtocol
         self.dispatcher = dispatcher
 
     def buildProtocol(self, addr):
@@ -87,10 +90,10 @@ class tunnel_factory(protocol.ClientFactory):
         )
 
 
-class socks_dispatcher:
+class SocksDispatcher:
 
     def __init__(self, addr, port, ssl_ctx):
-        factory = tunnel_factory(self)
+        factory = TunnelFactory(self)
         reactor.connectSSL(
                 addr,
                 port,
@@ -251,7 +254,7 @@ class socks_dispatcher:
         self.closeSock(sock_id)
 
 
-class socks5_protocol(protocol.Protocol):
+class Socks5Protocol(protocol.Protocol):
 
     def __init__(self):
         self.remote_host = None
@@ -332,7 +335,7 @@ class socks5_protocol(protocol.Protocol):
             if len(self.buffer) < 10:
                 return
             ip1, ip2, ip3, ip4 = struct.unpack('!BBBB', self.buffer[4:8])
-            host = f'{ip1}.{ip2}.{ip3}.{ip4}'
+            host = f'{ip1}.{ip2}.{ip3}.{ip4}'.encode('utf-8')
             port, = struct.unpack('!H', self.buffer[8:10])
         elif atyp == 3:
             if len(self.buffer) < 5:
@@ -345,7 +348,7 @@ class socks5_protocol(protocol.Protocol):
         self.connectRemote(host, port)
 
     def sendConnectReply(self, rep):
-        message = struct.pack(
+        response = struct.pack(
                 '!BBBBBBBBH',
                 5,
                 rep,
@@ -357,10 +360,10 @@ class socks5_protocol(protocol.Protocol):
                 0,
                 0
         )
-        self.transport.write(message)
+        self.transport.write(response)
 
     def connectRemote(self, host, port):
-        self.remote_host = host
+        self.remote_host = host.decode('utf-8').strip()
         self.remote_port = port
         self.dispatcher.connectRemote(self, host, port)
         self.sendConnectReply(0)
@@ -371,10 +374,10 @@ class socks5_protocol(protocol.Protocol):
         self.dispatcher.sendRemote(self, data)
 
 
-class socks5_factory(protocol.ServerFactory):
+class Socks5Factory(protocol.ServerFactory):
 
     def __init__(self, dispatcher):
-        self.protocol = socks5_protocol
+        self.protocol = Socks5Protocol
         self.dispatcher = dispatcher
 
     def buildProtocol(self, addr):
@@ -384,21 +387,21 @@ class socks5_factory(protocol.ServerFactory):
 
 
 def start_server(config):
-    local_port = config['port']
+    port = config['port']
     remote_addr, remote_port = config['saddr'], config['sport']
     ca, key, cert = config['ca'], config['key'], config['cert']
-    ssl_ctx = ssl_ctx_factory(
+    ssl_ctx = SSLCtxFactory(
             True,
             ca,
             key,
             cert,
             verify
     )
-    dispatcher = socks_dispatcher(remote_addr, remote_port, ssl_ctx)
-    local_factory = socks5_factory(dispatcher)
+    dispatcher = SocksDispatcher(remote_addr, remote_port, ssl_ctx)
+    factory = Socks5Factory(dispatcher)
     reactor.listenTCP(
-            local_port,
-            local_factory,
+            port,
+            factory,
             interface='127.0.0.1'
     )
     reactor.run()

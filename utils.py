@@ -14,73 +14,15 @@ from OpenSSL import SSL as ssl
 
 
 __all__ = [
+        'Cache',
+        'SSLCtxFactory',
         'daemonize',
-        'cache',
-        'ssl_ctx_factory',
         'init_logger',
         'parse_args',
 ]
 
 
-def daemonize(pidfile, *,
-              stdin='/dev/null',
-              stdout='/dev/null',
-              stderr='/dev/null'):
-
-    if os.path.exists(pidfile):
-        raise RuntimeError('already running')
-
-    try:
-        if os.fork() > 0:
-            raise SystemExit(0)
-    except OSError as e:
-        raise RuntimeError(f'fork #1 failed: {e}')
-
-    os.chdir('/')
-    os.umask(0)
-    os.setsid()
-
-    try:
-        if os.fork() > 0:
-            raise SystemExit(0)
-    except OSError as e:
-        raise RuntimeError(f'fork #2 failed: {e}')
-
-    sys.stdin.flush()
-    sys.stdout.flush()
-
-    with open(stdin, 'rb', 0) as f:
-        os.dup2(f.fileno(), sys.stdin.fileno())
-    with open(stdout, 'ab', 0) as f:
-        os.dup2(f.fileno(), sys.stdout.fileno())
-    with open(stderr, 'ab', 0) as f:
-        os.dup2(f.fileno(), sys.stderr.fileno())
-
-    with open(pidfile, 'w') as f:
-        print(os.getpid(), file=f)
-
-    atexit.register(lambda: os.remove(pidfile))
-
-    def sigterm_handler(signo, frame):
-        os.remove(pidfile)
-        raise SystemExit(1)
-
-    signal.signal(signal.SIGTERM, sigterm_handler)
-
-
-class cache(OrderedDict):
-
-    def __init__(self, limit=1024):
-        super(cache, self).__init__()
-        self.limit = limit
-
-    def __setitem__(self, key, value):
-        while len(self) >= self.limit:
-            self.popitem(last=False)
-        super(cache, self).__setitem__(key, value)
-
-
-class ssl_ctx_factory:
+class SSLCtxFactory:
 
     method = ssl.TLSv1_2_METHOD
     _ctx = None
@@ -122,6 +64,62 @@ class ssl_ctx_factory:
 
     def getContext(self):
         return self._ctx
+
+
+class Cache(OrderedDict):
+
+    def __init__(self, limit=1024):
+        super(Cache, self).__init__()
+        self.limit = limit
+
+    def __setitem__(self, key, value):
+        while len(self) >= self.limit:
+            self.popitem(last=False)
+        super(Cache, self).__setitem__(key, value)
+
+
+def daemonize(pidfile, *,
+              stdin='/dev/null',
+              stdout='/dev/null',
+              stderr='/dev/null'):
+    if os.path.exists(pidfile):
+        raise RuntimeError('already running')
+
+    try:
+        if os.fork() > 0:
+            raise SystemExit(0)
+    except OSError as e:
+        raise RuntimeError(f'fork #1 failed: {e}')
+    os.chdir('/')
+    os.umask(0)
+    os.setsid()
+
+    try:
+        if os.fork() > 0:
+            raise SystemExit(0)
+    except OSError as e:
+        raise RuntimeError(f'fork #2 failed: {e}')
+
+    sys.stdin.flush()
+    sys.stdout.flush()
+
+    with open(stdin, 'rb', 0) as f:
+        os.dup2(f.fileno(), sys.stdin.fileno())
+    with open(stdout, 'ab', 0) as f:
+        os.dup2(f.fileno(), sys.stdout.fileno())
+    with open(stderr, 'ab', 0) as f:
+        os.dup2(f.fileno(), sys.stderr.fileno())
+
+    with open(pidfile, 'w') as f:
+        print(os.getpid(), file=f)
+
+    atexit.register(lambda: os.remove(pidfile))
+
+    def sigterm_handler(signo, frame):
+        os.remove(pidfile)
+        raise SystemExit(1)
+
+    signal.signal(signal.SIGTERM, sigterm_handler)
 
 
 def init_logger(config, logger):
