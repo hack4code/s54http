@@ -54,7 +54,7 @@ class TunnelProtocol(protocol.Protocol):
         self.buffer = b''
 
     def connectionMade(self):
-        self.dispatcher.transport = self.transport
+        self.dispatcher.tunnelConnected(self.transport)
 
     def dataReceived(self, data):
         self.buffer += data
@@ -88,11 +88,21 @@ class TunnelFactory(protocol.ClientFactory):
                 'connetion to server closed[%s]',
                 reason.getErrorMessage()
         )
+        self.dispatcher.tunnelClosed(connector)
 
 
 class SocksDispatcher:
 
     def __init__(self, addr, port, ssl_ctx):
+        self.transport = None
+        self.socks = {}
+        self._connectTunnel(
+                addr,
+                port,
+                ssl_ctx
+        )
+
+    def _connectTunnel(self, addr, port, ssl_ctx):
         factory = TunnelFactory(self)
         reactor.connectSSL(
                 addr,
@@ -100,7 +110,19 @@ class SocksDispatcher:
                 factory,
                 ssl_ctx
         )
+
+    def tunnelClosed(self, connector):
+        logger.info('reconnect to server')
+        connector.connect()
+        if not self.socks:
+            return
+        old_socks = self.socks
         self.socks = {}
+        for sock in old_socks.values():
+            sock.transport.loseConnection()
+
+    def tunnelConnected(self, transport):
+        self.transport = transport
 
     def dispatchMessage(self, message):
         type, = struct.unpack('!B', message[4:5])

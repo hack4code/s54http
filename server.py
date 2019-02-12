@@ -66,7 +66,7 @@ class RemoteFactory(protocol.ClientFactory):
         self.proxy.connectErr(message)
 
     def clientConnectionLost(self, connector, reason):
-        self.proxy.connectClosed()
+        self.proxy.connectionClosed()
 
 
 class SockProxy:
@@ -160,7 +160,7 @@ class SockProxy:
     def recvRemote(self, data):
         self.dispatcher.handleRemote(self.sock_id, data)
 
-    def connectClosed(self):
+    def connectionClosed(self):
         logger.info(
                 'sock_id[%u] connection[%s:%u] closed',
                 self.sock_id,
@@ -317,6 +317,14 @@ class SocksDispatcher:
         self.closeSock(sock_id)
         self.sendClose(sock_id)
 
+    def tunnelClosed(self):
+        if not self.socks:
+            return
+        old_socks = self.socks
+        self.socks = {}
+        for sock in old_socks.values():
+            sock.close()
+
 
 class TunnelProtocol(protocol.Protocol):
 
@@ -326,6 +334,7 @@ class TunnelProtocol(protocol.Protocol):
 
     def connectionLost(self, reason=None):
         logger.info('proxy closed connection')
+        self.dispatcher.tunnelClosed()
 
     def dataReceived(self, data):
         self.buffer += data
