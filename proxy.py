@@ -212,7 +212,6 @@ class SocksDispatcher:
             sock = self.socks[sock_id]
         except KeyError:
             logger.error('receive data for closed sock_id[%u]', sock_id)
-            self.sendClose(sock_id)
         else:
             logger.debug(
                     'sock_id[%u] receive data length=%u from %s:%u',
@@ -222,15 +221,6 @@ class SocksDispatcher:
                     sock.remote_port
             )
             sock.transport.write(data)
-
-    def sendClose(self, sock_id):
-        message = struct.pack(
-                '!IBQ',
-                13,
-                5,
-                sock_id
-        )
-        self.transport.write(message)
 
     def closeRemote(self, sock):
         """
@@ -246,7 +236,13 @@ class SocksDispatcher:
             return
         logger.info('sock_id[%u] local closed', sock_id)
         self.closeSock(sock_id)
-        self.sendClose(sock_id)
+        message = struct.pack(
+                '!IBQ',
+                13,
+                5,
+                sock_id
+        )
+        self.transport.write(message)
 
     def handleClose(self, message):
         """
