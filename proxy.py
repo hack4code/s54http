@@ -60,8 +60,8 @@ class tunnel_protocol(protocol.Protocol):
         length, = struct.unpack('!I', self.buffer[:4])
         if len(self.buffer) < length:
             return
-        message = memoryview(self.buffer)
-        self.dispatcher.dispatchMessage(message[:length])
+        message = memoryview(self.buffer)[:length]
+        self.dispatcher.dispatchMessage(message)
         self.buffer = self.buffer[length:]
 
 
@@ -132,7 +132,7 @@ class socks_dispatcher:
         self.socks[sock_id] = sock
         host_length = len(host)
         total_length = 15 + host_length
-        logger.debug(
+        logger.info(
                 'sock_id[%u] connect %s:%u',
                 sock_id,
                 host.decode('utf-8'),
@@ -173,6 +173,13 @@ class socks_dispatcher:
         +-----+------+----+------+
         """
         sock_id = sock.sock_id
+        logger.debug(
+                'sock_id[%u] send data length=%u to %s:%u',
+                sock_id,
+                len(data),
+                sock.remote_host,
+                sock.remote_port
+        )
         total_length = 13 + len(data)
         header = struct.pack(
                 f'!IBQ',
@@ -193,12 +200,20 @@ class socks_dispatcher:
         +-----+------+----+------+
         """
         sock_id, = struct.unpack(f'!Q', message[5:13])
+        data = message[13:]
         try:
             sock = self.socks[sock_id]
         except KeyError:
             logger.error('receive data for closed sock_id[%u]', sock_id)
         else:
-            sock.transport.write(message[13:])
+            logger.debug(
+                    'sock_id[%u] receive data length=%u from %s:%u',
+                    sock_id,
+                    len(data),
+                    sock.remote_host,
+                    sock.remote_port
+            )
+            sock.transport.write(data)
 
     def closeRemote(self, sock):
         """

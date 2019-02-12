@@ -201,7 +201,7 @@ class socks_dispatcher:
         sock_id, = struct.unpack('!Q', message[5:13])
         host = message[13:-2].tobytes().decode('utf-8').strip()
         port, = struct.unpack('!H', message[-2:])
-        logger.debug(
+        logger.info(
                 'sock_id[%u] connect %s:%u',
                 sock_id,
                 host,
