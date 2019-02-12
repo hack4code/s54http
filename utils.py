@@ -22,18 +22,35 @@ __all__ = [
 ]
 
 
+logger = logging.getLogger(__name__)
+
+
 class SSLCtxFactory:
 
     method = ssl.TLSv1_2_METHOD
     _ctx = None
 
-    def __init__(self, client, ca, key, cert, verify):
+    def __init__(self, client, ca, key, cert):
         self.isClient = client
         self._ca = ca
         self._key = key
         self._cert = cert
-        self._verify = verify
         self.cacheContext()
+
+    def _verify(self, conn, x509, errno, errdepth, ok):
+        if not ok:
+            if self.isClient:
+                peer = 'server'
+            else:
+                peer = 'client'
+            cn = x509.get_subject().commonName
+            logger.error(
+                    '%s verify failed errno=%d cn=%s',
+                    peer,
+                    errno,
+                    cn
+            )
+        return ok
 
     def cacheContext(self):
         if self._ctx is None:

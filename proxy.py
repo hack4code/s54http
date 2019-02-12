@@ -25,27 +25,8 @@ config = {
         'logfile': 'socks.log',
         'loglevel': 'INFO'
 }
+
 logger = logging.getLogger(__name__)
-
-_SOCK_ID = 0
-
-
-def verify(conn, x509, errno, errdepth, ok):
-    if not ok:
-        cn = x509.get_subject().commonName
-        logger.error(
-                'server verify failed errno=%d cn=%s',
-                errno,
-                cn
-        )
-    return ok
-
-
-def next_sock_id():
-    global _SOCK_ID
-
-    _SOCK_ID = _SOCK_ID + 1
-    return _SOCK_ID
 
 
 class TunnelProtocol(protocol.Protocol):
@@ -81,7 +62,8 @@ class TunnelFactory(protocol.ClientFactory):
 
     def clientConnectionFailed(self, connector, reason):
         message = reason.getErrorMessage()
-        raise RuntimeError(f'connect server failed[{message}]')
+        logger.error('connect server failed[%s]', message)
+        reactor.stop()
 
     def clientConnectionLost(self, connector, reason):
         logger.info(
@@ -280,6 +262,16 @@ class SocksDispatcher:
         self.closeSock(sock_id)
 
 
+_SOCK_ID = 0
+
+
+def _next_sock_id():
+    global _SOCK_ID
+
+    _SOCK_ID = _SOCK_ID + 1
+    return _SOCK_ID
+
+
 class Socks5Protocol(protocol.Protocol):
 
     def __init__(self):
@@ -288,7 +280,7 @@ class Socks5Protocol(protocol.Protocol):
         self.buffer = None
         self.state = None
         self.dispatcher = None
-        self.sock_id = next_sock_id()
+        self.sock_id = _next_sock_id()
 
     def connectionMade(self):
         self.state = 'waitHello'
@@ -421,7 +413,6 @@ def start_server(config):
             ca,
             key,
             cert,
-            verify
     )
     dispatcher = SocksDispatcher(remote_addr, remote_port, ssl_ctx)
     factory = Socks5Factory(dispatcher)

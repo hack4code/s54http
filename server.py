@@ -34,13 +34,6 @@ config = {
 }
 
 
-def verify(conn, x509, errno, errdepth, ok):
-    if not ok:
-        cn = x509.get_subject().commonName
-        logger.error('client verify failed errno=%d cn=%s', errno, cn)
-    return ok
-
-
 class RemoteProtocol(protocol.Protocol):
 
     def connectionMade(self):
@@ -358,7 +351,6 @@ def start_server(config):
             ca,
             key,
             cert,
-            verify
     )
     reactor.listenSSL(port, factory, ssl_ctx)
     logger.info('server start running...')
