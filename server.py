@@ -37,6 +37,7 @@ config = {
 class RemoteProtocol(protocol.Protocol):
 
     def connectionMade(self):
+        self.proxy = self.factory.proxy
         self.proxy.connectOk(self.transport)
 
     def dataReceived(self, data):
@@ -45,14 +46,10 @@ class RemoteProtocol(protocol.Protocol):
 
 class RemoteFactory(protocol.ClientFactory):
 
-    def __init__(self, proxy):
-        self.protocol = RemoteProtocol
-        self.proxy = proxy
+    protocol = RemoteProtocol
 
-    def buildProtocol(self, addr):
-        p = protocol.ClientFactory.buildProtocol(self, addr)
-        p.proxy = self.proxy
-        return p
+    def __init__(self, proxy):
+        self.proxy = proxy
 
     def clientConnectionFailed(self, connector, reason):
         message = reason.getErrorMessage()
@@ -69,24 +66,24 @@ class SockProxy:
         self.dispatcher = dispatcher
         self.connected = False
         self.buffer = b''
-        self.host = host
-        self.port = port
-        self.addr = None
+        self.remote_host = host
+        self.remote_addr = None
+        self.remote_port = port
         self.transport = None
-        self.setAddr(host)
+        self.resolveHost(host)
 
     def connectRemote(self):
-        assert self.addr
+        assert self.remote_addr
         factory = RemoteFactory(self)
         reactor.connectTCP(
-                self.addr,
-                self.port,
+                self.remote_addr,
+                self.remote_port,
                 factory
         )
         self.connected = True
 
     def resolveOk(self, addr):
-        self.addr = addr
+        self.remote_addr = addr
         if not self.connected and len(self.buffer) > 0:
             self.connectRemote()
 
@@ -98,14 +95,14 @@ class SockProxy:
         )
         self.dispatcher.handleConnect(self.sock_id, 1)
 
-    def setAddr(self, host):
+    def resolveHost(self, host):
         if _IP.match(host):
-            self.addr = host
+            self.remote_addr = host
         else:
             try:
-                self.addr = _name_cache[host]
+                self.remote_addr = _name_cache[host]
             except KeyError:
-                self.addr = None
+                self.remote_addr = None
                 d = _name_server.lookupAddress(host)
 
                 def resolve_ok(records, proxy):
@@ -136,8 +133,8 @@ class SockProxy:
         logger.error(
                 'sock_id[%u] connect %s:%u failed[%s]',
                 self.sock_id,
-                self.host,
-                self.port,
+                self.remote_host,
+                self.remote_port,
                 message
         )
         self.dispatcher.handleConnect(self.sock_id, 1)
@@ -147,7 +144,7 @@ class SockProxy:
             self.transport.write(data)
             return
         self.buffer += data
-        if not self.connected and self.addr is not None:
+        if not self.connected and self.remote_addr is not None:
             self.connectRemote()
 
     def recvRemote(self, data):
@@ -157,8 +154,8 @@ class SockProxy:
         logger.info(
                 'sock_id[%u] connection[%s:%u] closed',
                 self.sock_id,
-                self.host,
-                self.port
+                self.remote_host,
+                self.remote_port
         )
         self.dispatcher.handleClose(self.sock_id)
 
@@ -203,7 +200,12 @@ class SocksDispatcher:
                 port
         )
         assert sock_id not in self.socks
-        self.socks[sock_id] = SockProxy(sock_id, self, host, port)
+        self.socks[sock_id] = SockProxy(
+                sock_id,
+                self,
+                host,
+                port,
+        )
 
     def handleConnect(self, sock_id, code):
         """
@@ -312,7 +314,7 @@ class SocksDispatcher:
         old_socks = self.socks
         self.socks = {}
         for sock in old_socks.values():
-            sock.close()
+            sock.transport.abortConnection()
 
 
 class TunnelProtocol(protocol.Protocol):

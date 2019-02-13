@@ -31,10 +31,9 @@ logger = logging.getLogger(__name__)
 
 class TunnelProtocol(protocol.Protocol):
 
-    def __init__(self):
-        self.buffer = b''
-
     def connectionMade(self):
+        self.buffer = b''
+        self.dispatcher = self.factory.dispatcher
         self.dispatcher.tunnelConnected(self.transport)
 
     def dataReceived(self, data):
@@ -51,14 +50,11 @@ class TunnelProtocol(protocol.Protocol):
 
 class TunnelFactory(protocol.ClientFactory):
 
+    protocol = TunnelProtocol
+
     def __init__(self, dispatcher):
         self.protocol = TunnelProtocol
         self.dispatcher = dispatcher
-
-    def buildProtocol(self, addr):
-        p = protocol.ClientFactory.buildProtocol(self, addr)
-        p.dispatcher = self.dispatcher
-        return p
 
     def clientConnectionFailed(self, connector, reason):
         message = reason.getErrorMessage()
@@ -78,13 +74,13 @@ class SocksDispatcher:
     def __init__(self, addr, port, ssl_ctx):
         self.transport = None
         self.socks = {}
-        self._connectTunnel(
+        self.connectTunnel(
                 addr,
                 port,
                 ssl_ctx
         )
 
-    def _connectTunnel(self, addr, port, ssl_ctx):
+    def connectTunnel(self, addr, port, ssl_ctx):
         factory = TunnelFactory(self)
         reactor.connectSSL(
                 addr,
@@ -96,14 +92,13 @@ class SocksDispatcher:
     def tunnelClosed(self, connector):
         logger.info('reconnect to server')
         connector.connect()
-        if not self.socks:
-            return
-        old_socks = self.socks
-        self.socks = {}
-        for sock in old_socks.values():
-            sock.transport.loseConnection()
 
     def tunnelConnected(self, transport):
+        if self.socks:
+            old_socks = self.socks
+            self.socks = {}
+            for sock in old_socks.values():
+                sock.transport.abortConnection()
         self.transport = transport
 
     def dispatchMessage(self, message):
@@ -258,29 +253,15 @@ class SocksDispatcher:
         self.closeSock(sock_id)
 
 
-_SOCK_ID = 0
-
-
-def _next_sock_id():
-    global _SOCK_ID
-
-    _SOCK_ID = _SOCK_ID + 1
-    return _SOCK_ID
-
-
 class Socks5Protocol(protocol.Protocol):
 
-    def __init__(self):
+    def connectionMade(self):
         self.remote_host = None
         self.remote_port = None
-        self.buffer = None
-        self.state = None
-        self.dispatcher = None
-        self.sock_id = _next_sock_id()
-
-    def connectionMade(self):
         self.state = 'waitHello'
         self.buffer = b''
+        self.dispatcher = self.factory.dispatcher
+        self.sock_id = self.factory.sock_id
 
     def connectionLost(self, reason=None):
         self.dispatcher.closeRemote(self)
@@ -390,14 +371,20 @@ class Socks5Protocol(protocol.Protocol):
 
 class Socks5Factory(protocol.ServerFactory):
 
-    def __init__(self, dispatcher):
-        self.protocol = Socks5Protocol
-        self.dispatcher = dispatcher
+    protocol = Socks5Protocol
 
-    def buildProtocol(self, addr):
-        p = protocol.ServerFactory.buildProtocol(self, addr)
-        p.dispatcher = self.dispatcher
-        return p
+    def __init__(self, addr, port, ssl_ctx):
+        self._sock_id = 0
+        self.dispatcher = SocksDispatcher(
+                addr,
+                port,
+                ssl_ctx
+        )
+
+    @property
+    def sock_id(self):
+        self._sock_id = self._sock_id + 1
+        return self._sock_id
 
 
 def start_server(config):
@@ -410,8 +397,11 @@ def start_server(config):
             key,
             cert,
     )
-    dispatcher = SocksDispatcher(remote_addr, remote_port, ssl_ctx)
-    factory = Socks5Factory(dispatcher)
+    factory = Socks5Factory(
+            remote_addr,
+            remote_port,
+            ssl_ctx
+    )
     reactor.listenTCP(
             port,
             factory,
