@@ -53,7 +53,6 @@ class TunnelFactory(protocol.ClientFactory):
     protocol = TunnelProtocol
 
     def __init__(self, dispatcher):
-        self.protocol = TunnelProtocol
         self.dispatcher = dispatcher
 
     def clientConnectionFailed(self, connector, reason):
