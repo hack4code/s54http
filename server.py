@@ -187,11 +187,11 @@ class SocksDispatcher:
         +-----+------+----+------+------+
         | LEN | TYPE | ID | HOST | PORT |
         +-----+------+----+------+------+
-        |  4  |   1  |  8 |      |   2  |
+        |  4  |   1  |  4 |      |   2  |
         +-----+------+----+------+------+
         """
-        sock_id, = struct.unpack('!Q', message[5:13])
-        host = message[13:-2].tobytes().decode('utf-8').strip()
+        sock_id, = struct.unpack('!I', message[5:9])
+        host = message[9:-2].tobytes().decode('utf-8').strip()
         port, = struct.unpack('!H', message[-2:])
         logger.info(
                 'sock_id[%u] connect %s:%u',
@@ -213,15 +213,15 @@ class SocksDispatcher:
         +-----+------+----+------+
         | LEN | TYPE | ID | CODE |
         +-----+------+----+------+
-        |  4  |   1  |  8 |   1  |
+        |  4  |   1  |  4 |   1  |
         +-----+------+----+------+
         """
         if 0 == code:
             return
         self.closeSock(sock_id)
         message = struct.pack(
-                '!IBQB',
-                14,
+                '!IBIB',
+                10,
                 2,
                 sock_id,
                 code
@@ -234,11 +234,11 @@ class SocksDispatcher:
         +-----+------+----+------+
         | LEN | TYPE | ID | DATA |
         +-----+------+----+------+
-        |  4  |   1  |  8 |      |
+        |  4  |   1  |  4 |      |
         +-----+------+----+------+
         """
-        sock_id, = struct.unpack('!Q', message[5:13])
-        data = message[13:]
+        sock_id, = struct.unpack('!I', message[5:9])
+        data = message[9:]
         try:
             sock = self.socks[sock_id]
         except KeyError:
@@ -252,12 +252,12 @@ class SocksDispatcher:
         +-----+------+----+------+
         | LEN | TYPE | ID | DATA |
         +-----+------+----+------+
-        |  4  |   1  |  8 |      |
+        |  4  |   1  |  4 |      |
         +-----+------+----+------+
         """
-        total_length = 13 + len(data)
+        total_length = 9 + len(data)
         header = struct.pack(
-                f'!IBQ',
+                f'!IBI',
                 total_length,
                 4,
                 sock_id,
@@ -280,10 +280,10 @@ class SocksDispatcher:
         +-----+------+----+
         | LEN | TYPE | ID |
         +-----+------+----+
-        |  4  |   1  |  8 |
+        |  4  |   1  |  4 |
         +-----+------+----+
         """
-        sock_id, = struct.unpack('!Q', message[5:13])
+        sock_id, = struct.unpack('!I', message[5:9])
         logger.info('sock_id[%u] remote closed', sock_id)
         self.closeSock(sock_id)
 
@@ -293,7 +293,7 @@ class SocksDispatcher:
         +-----+------+----+
         | LEN | TYPE | ID |
         +-----+------+----+
-        |  4  |   1  |  8 |
+        |  4  |   1  |  4 |
         +-----+------+----+
         """
         if sock_id not in self.socks:
@@ -301,8 +301,8 @@ class SocksDispatcher:
         logger.info('sock_id[%u] local closed', sock_id)
         self.closeSock(sock_id)
         message = struct.pack(
-                '!IBQ',
-                13,
+                '!IBI',
+                9,
                 6,
                 sock_id
         )

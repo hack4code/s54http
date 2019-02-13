@@ -126,13 +126,13 @@ class SocksDispatcher:
         +-----+------+----+------+------+
         | LEN | TYPE | ID | HOST | PORT |
         +-----+------+----+------+------+
-        |  4  |   1  |  8 |      |   2  |
+        |  4  |   1  |  4 |      |   2  |
         +-----+------+----+------+------+
         """
         sock_id = sock.sock_id
         self.socks[sock_id] = sock
         host_length = len(host)
-        total_length = 15 + host_length
+        total_length = 11 + host_length
         logger.info(
                 'sock_id[%u] connect %s:%u',
                 sock_id,
@@ -140,7 +140,7 @@ class SocksDispatcher:
                 port,
         )
         message = struct.pack(
-                f'!IBQ{host_length}sH',
+                f'!IBI{host_length}sH',
                 total_length,
                 1,
                 sock_id,
@@ -155,10 +155,10 @@ class SocksDispatcher:
         +-----+------+----+------+
         | LEN | TYPE | ID | CODE |
         +-----+------+----+------+
-        |  4  |   1  |  8 |   1  |
+        |  4  |   1  |  4 |   1  |
         +-----+------+----+------+
         """
-        sock_id, code = struct.unpack('!QB', message[5:14])
+        sock_id, code = struct.unpack('!IB', message[5:10])
         if 0 == code:
             return
         logger.info('sock_id[%u] connect failed', sock_id)
@@ -170,7 +170,7 @@ class SocksDispatcher:
         +-----+------+----+------+
         | LEN | TYPE | ID | DATA |
         +-----+------+----+------+
-        |  4  |   1  |  8 |      |
+        |  4  |   1  |  4 |      |
         +-----+------+----+------+
         """
         sock_id = sock.sock_id
@@ -181,9 +181,9 @@ class SocksDispatcher:
                 sock.remote_host,
                 sock.remote_port
         )
-        total_length = 13 + len(data)
+        total_length = 9 + len(data)
         header = struct.pack(
-                f'!IBQ',
+                f'!IBI',
                 total_length,
                 3,
                 sock_id,
@@ -197,11 +197,11 @@ class SocksDispatcher:
         +-----+------+----+------+
         | LEN | TYPE | ID | DATA |
         +-----+------+----+------+
-        |  4  |   1  |  8 |      |
+        |  4  |   1  |  4 |      |
         +-----+------+----+------+
         """
-        sock_id, = struct.unpack(f'!Q', message[5:13])
-        data = message[13:]
+        sock_id, = struct.unpack(f'!I', message[5:9])
+        data = message[9:]
         try:
             sock = self.socks[sock_id]
         except KeyError:
@@ -222,7 +222,7 @@ class SocksDispatcher:
         +-----+------+----+
         | LEN | TYPE | ID |
         +-----+------+----+
-        |  4  |   1  |  8 |
+        |  4  |   1  |  4 |
         +-----+------+----+
         """
         sock_id = sock.sock_id
@@ -231,8 +231,8 @@ class SocksDispatcher:
         logger.info('sock_id[%u] local closed', sock_id)
         self.closeSock(sock_id)
         message = struct.pack(
-                '!IBQ',
-                13,
+                '!IBI',
+                9,
                 5,
                 sock_id
         )
@@ -244,10 +244,10 @@ class SocksDispatcher:
         +-----+------+----+
         | LEN | TYPE | ID |
         +-----+------+----+
-        |  4  |   1  |  8 |
+        |  4  |   1  |  4 |
         +-----+------+----+
         """
-        sock_id, = struct.unpack('!Q', message[5:13])
+        sock_id, = struct.unpack('!I', message[5:])
         logger.info('sock_id[%u] remote closed', sock_id)
         self.closeSock(sock_id)
 
@@ -382,6 +382,8 @@ class Socks5Factory(protocol.ServerFactory):
 
     @property
     def sock_id(self):
+        if 2**32 - 1 == self._sock_id:
+            self._sock_id = 0
         self._sock_id = self._sock_id + 1
         return self._sock_id
 
