@@ -111,13 +111,16 @@ class SocksDispatcher:
         else:
             logger.error('receive unknown message type=%u', type)
 
-    def closeSock(self, sock_id):
+    def closeSock(self, sock_id, *, abort=False):
         try:
             sock = self.socks[sock_id]
         except KeyError:
             logger.error('close closed sock_id[%u]', sock_id)
         else:
-            sock.transport.loseConnection()
+            if abort:
+                sock.transport.abortConnection()
+            else:
+                sock.transport.loseConnection()
             del self.socks[sock_id]
 
     def connectRemote(self, sock, host, port):
@@ -162,7 +165,7 @@ class SocksDispatcher:
         if 0 == code:
             return
         logger.info('sock_id[%u] connect failed', sock_id)
-        self.closeSock(sock_id)
+        self.closeSock(sock_id, abort=True)
 
     def sendRemote(self, sock, data):
         """
@@ -249,7 +252,7 @@ class SocksDispatcher:
         """
         sock_id, = struct.unpack('!I', message[5:])
         logger.info('sock_id[%u] remote closed', sock_id)
-        self.closeSock(sock_id)
+        self.closeSock(sock_id, abort=True)
 
 
 class Socks5Protocol(protocol.Protocol):

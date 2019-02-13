@@ -159,10 +159,6 @@ class SockProxy:
         )
         self.dispatcher.handleClose(self.sock_id)
 
-    def close(self):
-        if self.transport:
-            self.transport.loseConnection()
-
 
 class SocksDispatcher:
 
@@ -218,7 +214,7 @@ class SocksDispatcher:
         """
         if 0 == code:
             return
-        self.closeSock(sock_id)
+        self.closeSock(sock_id, abort=True)
         message = struct.pack(
                 '!IBIB',
                 10,
@@ -265,13 +261,16 @@ class SocksDispatcher:
         self.transport.write(header)
         self.transport.write(data)
 
-    def closeSock(self, sock_id):
+    def closeSock(self, sock_id, *, abort=False):
         try:
             sock = self.socks[sock_id]
         except KeyError:
             logger.error('close closed sock_id[%u]', sock_id)
         else:
-            sock.close()
+            if abort:
+                sock.transport.abortConnection()
+            else:
+                sock.transport.loseConnection()
             del self.socks[sock_id]
 
     def closeRemote(self, message):
@@ -285,7 +284,7 @@ class SocksDispatcher:
         """
         sock_id, = struct.unpack('!I', message[5:9])
         logger.info('sock_id[%u] remote closed', sock_id)
-        self.closeSock(sock_id)
+        self.closeSock(sock_id, abort=True)
 
     def handleClose(self, sock_id):
         """
