@@ -111,6 +111,7 @@ class SockProxy:
                         if answer.type != dns.A:
                             continue
                         addr = answer.payload.dottedQuad()
+                        _name_cache[host] = addr
                         proxy.resolveOk(addr)
                         break
                     else:
@@ -253,7 +254,7 @@ class SocksDispatcher:
         """
         total_length = 9 + len(data)
         header = struct.pack(
-                f'!IBI',
+                '!IBI',
                 total_length,
                 4,
                 sock_id,
