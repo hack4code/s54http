@@ -167,7 +167,7 @@ def parse_args(config):
             "--port",
             dest="port",
             type=int,
-            help="listen port"
+            help="proxy listen port"
     )
     parser.add_argument(
             "--key",
@@ -188,14 +188,14 @@ def parse_args(config):
             "-S",
             "--saddr",
             dest="saddr",
-            help="remote server address"
+            help="server address"
     )
     parser.add_argument(
             "-P",
             "--sport",
             dest="sport",
             type=int,
-            help="remote server port"
+            help="server listening port"
     )
     parser.add_argument(
             "--pidfile",
@@ -220,8 +220,12 @@ def parse_args(config):
     args = parser.parse_args()
     for key in config.keys():
         value = getattr(args, key, None)
-        if value:
-            config[key] = value
+        if not value:
+            continue
+        config[key] = value
     for key in ('ca', 'key', 'cert', 'pidfile', 'logfile'):
         value = config[key]
-        config[key] = str(Path(value).absolute())
+        fp = Path(value)
+        config[key] = str(fp.absolute())
+        if key in ('ca', 'key', 'cert') and not fp.exists():
+            raise RuntimeError(f'{key} file not existed')
