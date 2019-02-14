@@ -23,7 +23,7 @@ _IP = re.compile(r'[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}')
 
 config = {
         'daemon': False,
-        'port': 6666,
+        'port': 8080,
         'ca': 'keys/ca.crt',
         'key': 'keys/server.key',
         'cert': 'keys/server.crt',
