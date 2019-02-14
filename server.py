@@ -125,9 +125,8 @@ class SockProxy:
                 d.addErrback(resolve_err, self)
 
     def connectOk(self, transport):
-        if len(self.buffer) > 0:
-            transport.write(self.buffer)
-            self.buffer = b''
+        transport.write(self.buffer)
+        self.buffer = b''
         self.transport = transport
 
     def connectErr(self, message):
@@ -239,7 +238,7 @@ class SocksDispatcher:
         try:
             sock = self.socks[sock_id]
         except KeyError:
-            logger.error('send data to closed sock_id[%u]', sock_id)
+            logger.error('sock_id[%u] send data after closed', sock_id)
         else:
             sock.sendRemote(data)
 
@@ -266,7 +265,7 @@ class SocksDispatcher:
         try:
             sock = self.socks[sock_id]
         except KeyError:
-            logger.error('close closed sock_id[%u]', sock_id)
+            logger.error('sock_id[%u] closed again', sock_id)
         else:
             if abort:
                 sock.transport.abortConnection()

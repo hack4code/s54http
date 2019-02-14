@@ -100,6 +100,18 @@ class SocksDispatcher:
                 sock.transport.abortConnection()
         self.transport = transport
 
+    def closeSock(self, sock_id, *, abort=False):
+        try:
+            sock = self.socks[sock_id]
+        except KeyError:
+            logger.error('sock_id[%u] closed again', sock_id)
+        else:
+            if abort:
+                sock.transport.abortConnection()
+            else:
+                sock.transport.loseConnection()
+            del self.socks[sock_id]
+
     def dispatchMessage(self, message):
         type, = struct.unpack('!B', message[4:5])
         if 2 == type:
@@ -110,18 +122,6 @@ class SocksDispatcher:
             self.handleClose(message)
         else:
             logger.error('receive unknown message type=%u', type)
-
-    def closeSock(self, sock_id, *, abort=False):
-        try:
-            sock = self.socks[sock_id]
-        except KeyError:
-            logger.error('close closed sock_id[%u]', sock_id)
-        else:
-            if abort:
-                sock.transport.abortConnection()
-            else:
-                sock.transport.loseConnection()
-            del self.socks[sock_id]
 
     def connectRemote(self, sock, host, port):
         """
@@ -208,7 +208,7 @@ class SocksDispatcher:
         try:
             sock = self.socks[sock_id]
         except KeyError:
-            logger.error('receive data for closed sock_id[%u]', sock_id)
+            logger.error('sock_id[%u] receive data after closed', sock_id)
         else:
             logger.debug(
                     'sock_id[%u] receive data length=%u from %s:%u',
@@ -312,21 +312,21 @@ class Socks5Protocol(protocol.Protocol):
         )
         if version != 5:
             logger.error('unsupported version %u', version)
-            self.transport.loseConnection()
+            self.transport.abortConnection()
             return
         if reserved != 0:
             logger.error('reserved value not 0')
-            self.transport.loseConnection()
+            self.transport.abortConnection()
             return
         if command != 1:
             logger.error('unsupported command %u', command)
             self.sendConnectReply(7)
-            self.transport.loseConnection()
+            self.transport.abortConnection()
             return
         if atyp not in (1, 3):
             logger.error('unsupported atyp %u', atyp)
             self.sendConnectReply(8)
-            self.transport.loseConnection()
+            self.transport.abortConnection()
             return
         if atyp == 1:
             if len(self.buffer) < 10:

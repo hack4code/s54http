@@ -53,23 +53,24 @@ class SSLCtxFactory:
         return ok
 
     def cacheContext(self):
-        if self._ctx is None:
-            ctx = ssl.Context(ssl.TLSv1_2_METHOD)
-            ctx.set_options(ssl.OP_NO_SSLv2)
-            ctx.set_options(ssl.OP_NO_SSLv3)
-            ctx.set_options(ssl.OP_NO_TLSv1)
-            ctx.set_options(ssl.OP_NO_TLSv1_1)
-            ctx.use_certificate_file(self._cert)
-            ctx.use_privatekey_file(self._key)
-            ctx.check_privatekey()
-            ctx.load_verify_locations(self._ca)
-            ctx.set_verify(
-                    ssl.VERIFY_PEER |
-                    ssl.VERIFY_FAIL_IF_NO_PEER_CERT |
-                    ssl.VERIFY_CLIENT_ONCE,
-                    self._verify
-            )
-            self._ctx = ctx
+        if self._ctx is not None:
+            return
+        ctx = ssl.Context(ssl.TLSv1_2_METHOD)
+        ctx.set_options(ssl.OP_NO_SSLv2)
+        ctx.set_options(ssl.OP_NO_SSLv3)
+        ctx.set_options(ssl.OP_NO_TLSv1)
+        ctx.set_options(ssl.OP_NO_TLSv1_1)
+        ctx.use_certificate_file(self._cert)
+        ctx.use_privatekey_file(self._key)
+        ctx.check_privatekey()
+        ctx.load_verify_locations(self._ca)
+        ctx.set_verify(
+                ssl.VERIFY_PEER |
+                ssl.VERIFY_FAIL_IF_NO_PEER_CERT |
+                ssl.VERIFY_CLIENT_ONCE,
+                self._verify
+        )
+        self._ctx = ctx
 
     def __getstate__(self):
         d = self.__dict__.copy()
@@ -86,13 +87,13 @@ class SSLCtxFactory:
 class Cache(OrderedDict):
 
     def __init__(self, limit=1024):
-        super(Cache, self).__init__()
+        super().__init__()
         self.limit = limit
 
     def __setitem__(self, key, value):
         while len(self) >= self.limit:
             self.popitem(last=False)
-        super(Cache, self).__setitem__(key, value)
+        super().__setitem__(key, value)
 
 
 def daemonize(pidfile, *,
@@ -214,7 +215,7 @@ def parse_args(config):
     parser.add_argument(
             "--dns",
             dest="dns",
-            help="dns server host:port"
+            help="host:port"
     )
     args = parser.parse_args()
     for key in config.keys():
