@@ -268,12 +268,13 @@ class SocksDispatcher:
             logger.error('sock_id[%u] closed again', sock_id)
         else:
             del self.socks[sock_id]
-            if sock.transport is None:
+            transport = sock.transport
+            if transport is None:
                 return
             if abort:
-                sock.transport.abortConnection()
+                transport.abortConnection()
             else:
-                sock.transport.loseConnection()
+                transport.loseConnection()
 
     def closeRemote(self, message):
         """
@@ -315,7 +316,10 @@ class SocksDispatcher:
         old_socks = self.socks
         self.socks = {}
         for sock in old_socks.values():
-            sock.transport.abortConnection()
+            transport = sock.transport
+            if transport is None:
+                continue
+            transport.abortConnection()
 
 
 class TunnelProtocol(protocol.Protocol):
