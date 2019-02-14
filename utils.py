@@ -169,19 +169,16 @@ def parse_args(config):
             help="listen port"
     )
     parser.add_argument(
-            "-k",
             "--key",
             dest="key",
             help="key file path"
     )
     parser.add_argument(
-            "-a",
             "--ca",
             dest="ca",
             help="ca file path"
     )
     parser.add_argument(
-            "-c",
             "--cert",
             dest="cert",
             help="cert file path"
@@ -190,32 +187,34 @@ def parse_args(config):
             "-S",
             "--saddr",
             dest="saddr",
-            help="remote proxy address"
+            help="remote server address"
     )
     parser.add_argument(
             "-P",
             "--sport",
             dest="sport",
             type=int,
-            help="remote proxy port"
+            help="remote server port"
     )
     parser.add_argument(
-            "-f",
             "--pidfile",
             dest="pidfile",
             help="pid file path"
     )
     parser.add_argument(
-            "-l",
             "--logfile",
             dest="logfile",
             help="log file path"
     )
     parser.add_argument(
-            "-e",
             "--loglevel",
             dest="loglevel",
             help="INFO, WARN, ERROR"
+    )
+    parser.add_argument(
+            "--dns",
+            dest="dns",
+            help="dns server host:port"
     )
     args = parser.parse_args()
     for key in config.keys():

@@ -18,7 +18,6 @@ from utils import (
 logger = logging.getLogger(__name__)
 
 _name_cache = Cache()
-_name_server = client.createResolver(servers=[('8.8.8.8', 53)])
 _IP = re.compile(r'[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}')
 
 
@@ -30,7 +29,8 @@ config = {
         'cert': 'keys/server.crt',
         'pidfile': 'socks.pid',
         'logfile': 'socks.log',
-        'loglevel': 'INFO'
+        'loglevel': 'INFO',
+        'dns': '8.8.8.8:53',
 }
 
 
@@ -103,7 +103,7 @@ class SockProxy:
                 self.remote_addr = _name_cache[host]
             except KeyError:
                 self.remote_addr = None
-                d = _name_server.lookupAddress(host)
+                d = lookup_addr(host)
 
                 def resolve_ok(records, proxy):
                     answers, *_ = records
@@ -339,6 +339,25 @@ class TunnelProtocol(protocol.Protocol):
         self.buffer = self.buffer[length:]
 
 
+def lookup_addr(host):
+    global resolver
+
+    return resolver.lookupAddress(host)
+
+
+def init_dns(config):
+    global resolver
+
+    conf = config['dns'].strip()
+    if ':' in conf:
+        addr, port = conf.split(':')
+        port = int(port)
+    else:
+        addr = conf
+        port = 53
+    resolver = client.createResolver(servers=[(addr, port)])
+
+
 def start_server(config):
     port = config['port']
     ca, key, cert = config['ca'], config['key'], config['cert']
@@ -358,6 +377,7 @@ def start_server(config):
 def main():
     parse_args(config)
     init_logger(config, logger)
+    init_dns(config)
     if config['daemon']:
         pidfile = config['pidfile']
         logfile = config['logfile']

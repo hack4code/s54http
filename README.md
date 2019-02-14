@@ -3,10 +3,10 @@
 ##  Server
 
 ### python3
-python3 server.py -d -k keyfile -c certfile -a cafile
+python3 server.py -d --key keyfile --cert certfile --ca cafile
 
 ### docker
 start-server.sh
 
 ## Client
-python3 proxy.py -d -k keyfile -c certfile -a ca file
+python3 proxy.py -d --key keyfile --cert certfile --ca cafile
