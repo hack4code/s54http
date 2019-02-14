@@ -106,11 +106,13 @@ class SocksDispatcher:
         except KeyError:
             logger.error('sock_id[%u] closed again', sock_id)
         else:
+            del self.socks[sock_id]
+            if sock.transport is None:
+                return
             if abort:
                 sock.transport.abortConnection()
             else:
                 sock.transport.loseConnection()
-            del self.socks[sock_id]
 
     def dispatchMessage(self, message):
         type, = struct.unpack('!B', message[4:5])
