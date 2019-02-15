@@ -6,6 +6,9 @@ import struct
 import logging
 
 from twisted.internet import reactor, protocol
+from twisted.internet.error import CannotListenError
+from twisted.application.internet import ClientService
+from twisted.internet.endpoints import wrapClientTLS, HostnameEndpoint
 
 from utils import (
         SSLCtxFactory,
@@ -32,9 +35,12 @@ logger = logging.getLogger(__name__)
 class TunnelProtocol(protocol.Protocol):
 
     def connectionMade(self):
+        self.transport.setTcpNoDelay(1)
+        self.transport.setTcpKeepAlive(1)
         self.buffer = b''
         self.dispatcher = self.factory.dispatcher
-        self.dispatcher.tunnelConnected(self.transport)
+        self.dispatcher.tunnelConnected(self)
+        logger.info('proxy connected to server')
 
     def dataReceived(self, data):
         self.buffer += data
@@ -47,6 +53,9 @@ class TunnelProtocol(protocol.Protocol):
         self.dispatcher.dispatchMessage(message)
         self.buffer = self.buffer[length:]
 
+    def connectionLost(self, reason):
+        logger.info('connetion to server lost')
+
 
 class TunnelFactory(protocol.ClientFactory):
 
@@ -55,44 +64,34 @@ class TunnelFactory(protocol.ClientFactory):
     def __init__(self, dispatcher):
         self.dispatcher = dispatcher
 
-    def clientConnectionFailed(self, connector, reason):
-        message = reason.getErrorMessage()
-        logger.error('connect server failed[%s]', message)
-        reactor.stop()
-
-    def clientConnectionLost(self, connector, reason):
-        logger.info(
-                'connetion to server closed[%s]',
-                reason.getErrorMessage()
-        )
-        self.dispatcher.tunnelClosed(connector)
-
 
 class SocksDispatcher:
 
     def __init__(self, addr, port, ssl_ctx):
         self.transport = None
         self.socks = {}
-        self.connectTunnel(
-                addr,
-                port,
-                ssl_ctx
-        )
+        self.connectTunnel(addr, port, ssl_ctx)
 
     def connectTunnel(self, addr, port, ssl_ctx):
+        wrapped = HostnameEndpoint(reactor, addr, port)
+        endpoint = wrapClientTLS(ssl_ctx, wrapped)
         factory = TunnelFactory(self)
-        reactor.connectSSL(
-                addr,
-                port,
-                factory,
-                ssl_ctx
-        )
+        service = ClientService(endpoint, factory)
+        waitForConnection = service.whenConnected(failAfterFailures=3)
 
-    def tunnelClosed(self, connector):
-        logger.info('reconnect to server')
-        connector.connect()
+        def tunnelConnected(p):
+            pass
 
-    def tunnelConnected(self, tunnel_transport):
+        def failed(f):
+            logger.error(
+                'connect has failed 3 times, proxy will keep connecting'
+            )
+
+        waitForConnection.addCallbacks(tunnelConnected, failed)
+        self.tunnel = service
+        service.startService()
+
+    def tunnelConnected(self, p):
         if self.socks:
             old_socks = self.socks
             self.socks = {}
@@ -101,7 +100,7 @@ class SocksDispatcher:
                 if transport is None:
                     continue
                 transport.abortConnection()
-        self.transport = tunnel_transport
+        self.transport = p.transport
 
     def closeSock(self, sock_id, *, abort=False):
         try:
@@ -197,8 +196,7 @@ class SocksDispatcher:
                 3,
                 sock_id,
         )
-        self.transport.write(header)
-        self.transport.write(data)
+        self.transport.writeSequence([header, data])
 
     def handleRemote(self, message):
         """
@@ -412,11 +410,12 @@ def start_server(config):
             remote_port,
             ssl_ctx
     )
-    reactor.listenTCP(
-            port,
-            factory,
-            interface='127.0.0.1'
-    )
+    try:
+        reactor.listenTCP(port, factory, interface='127.0.0.1')
+    except CannotListenError:
+        raise RuntimeError(
+                f"couldn't listen on :{port}, address already in use"
+        )
     reactor.run()
 
 

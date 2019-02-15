@@ -8,6 +8,7 @@ import logging
 
 from twisted.names import client, dns
 from twisted.internet import reactor, protocol
+from twisted.internet.error import CannotListenError
 
 from utils import (
         SSLCtxFactory, Cache,
@@ -325,6 +326,8 @@ class SocksDispatcher:
 class TunnelProtocol(protocol.Protocol):
 
     def connectionMade(self):
+        self.transport.setTcpNoDelay(True)
+        self.transport.setTcpKeepAlive(True)
         self.buffer = b''
         self.dispatcher = SocksDispatcher(self.transport)
 
@@ -372,9 +375,14 @@ def start_server(config):
             False,
             ca,
             key,
-            cert,
+            cert
     )
-    reactor.listenSSL(port, factory, ssl_ctx)
+    try:
+        reactor.listenSSL(port, factory, ssl_ctx)
+    except CannotListenError:
+        raise RuntimeError(
+                f"couldn't listen on :{port}, address already in use"
+        )
     logger.info('server start running...')
     reactor.run()
 
