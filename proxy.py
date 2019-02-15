@@ -197,8 +197,7 @@ class SocksDispatcher:
                 3,
                 sock_id,
         )
-        self.transport.write(header)
-        self.transport.write(data)
+        self.transport.writeSequence([header, data])
 
     def handleRemote(self, message):
         """

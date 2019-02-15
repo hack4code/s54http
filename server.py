@@ -258,8 +258,7 @@ class SocksDispatcher:
                 4,
                 sock_id,
         )
-        self.transport.write(header)
-        self.transport.write(data)
+        self.transport.writeSequence([header, data])
 
     def closeSock(self, sock_id, *, abort=False):
         try:
