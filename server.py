@@ -61,7 +61,7 @@ class RemoteFactory(protocol.ClientFactory):
 
 class SockProxy:
 
-    def __init__(self, sock_id, dispatcher, host, port, resolver, addr_cache):
+    def __init__(self, sock_id, dispatcher, host, port):
         self.sock_id = sock_id
         self.dispatcher = dispatcher
         self.connected = False
@@ -70,8 +70,8 @@ class SockProxy:
         self.remote_addr = None
         self.remote_port = port
         self.transport = None
-        self.resolver = resolver
-        self.addr_cache = addr_cache
+        self.resolver = dispatcher.resolver
+        self.addr_cache = dispatcher.addr_cache
         self.resolveHost(host)
 
     def connectRemote(self):
