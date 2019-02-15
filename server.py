@@ -6,7 +6,7 @@ import re
 import struct
 import logging
 
-from twisted.names import client, dns
+from twisted.names import client
 from twisted.internet import reactor, protocol
 from twisted.internet.error import CannotListenError
 
@@ -103,20 +103,15 @@ class SockProxy:
             try:
                 self.remote_addr = _name_cache[host]
             except KeyError:
-                self.remote_addr = None
-                d = lookup_addr(host)
+                global resolver
 
-                def resolve_ok(records, proxy):
-                    answers, *_ = records
-                    for answer in answers:
-                        if answer.type != dns.A:
-                            continue
-                        addr = answer.payload.dottedQuad()
-                        _name_cache[host] = addr
-                        proxy.resolveOk(addr)
-                        break
-                    else:
-                        proxy.resolveErr()
+                self.remote_addr = None
+
+                d = resolver.getHostByName(host, effort=2)
+
+                def resolve_ok(addr, proxy):
+                    _name_cache[host] = addr
+                    proxy.resolveOk(addr)
 
                 d.addCallback(resolve_ok, self)
 
@@ -347,13 +342,7 @@ class TunnelProtocol(protocol.Protocol):
         self.buffer = self.buffer[length:]
 
 
-def lookup_addr(host):
-    global resolver
-
-    return resolver.lookupAddress(host)
-
-
-def init_dns(config):
+def init_resolver(config):
     global resolver
 
     conf = config['dns'].strip()
@@ -390,14 +379,14 @@ def start_server(config):
 def main():
     parse_args(config)
     init_logger(config, logger)
-    init_dns(config)
+    init_resolver(config)
     if config['daemon']:
         pidfile = config['pidfile']
         logfile = config['logfile']
         daemonize(
-                pidfile,
-                stdout=logfile,
-                stderr=logfile
+            pidfile,
+            stdout=logfile,
+            stderr=logfile
         )
     start_server(config)
 

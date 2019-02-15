@@ -54,7 +54,7 @@ class TunnelProtocol(protocol.Protocol):
         self.buffer = self.buffer[length:]
 
     def connectionLost(self, reason):
-        logger.info('connetion to server lost')
+        logger.error('connetion to server lost')
         self.dispatcher.tunnelClosed()
 
 
@@ -71,6 +71,7 @@ class SocksDispatcher:
     def __init__(self, addr, port, ssl_ctx):
         self.socks = {}
         self.transport = None
+        self.service = None
         self.connectTunnel(addr, port, ssl_ctx)
 
     @property
@@ -93,7 +94,7 @@ class SocksDispatcher:
             )
 
         waitForConnection.addCallbacks(connected, failed)
-        self.tunnel = service
+        self.service = service
         service.startService()
 
     def tunnelConnected(self, p):
@@ -109,6 +110,9 @@ class SocksDispatcher:
                     continue
                 transport.abortConnection()
         self.transport = None
+
+    def stopDispatch(self):
+        self.service.stopService()
 
     def closeSock(self, sock_id, *, abort=False):
         try:
@@ -279,9 +283,8 @@ class Socks5Protocol(protocol.Protocol):
         self.sock_id = self.factory.sock_id
         if not dispatcher.isConnected:
             self.transport.abortConnection()
-            return
 
-    def connectionLost(self, reason=None):
+    def connectionLost(self, reason):
         self.dispatcher.closeRemote(self)
 
     def dataReceived(self, data):
@@ -398,6 +401,10 @@ class Socks5Factory(protocol.ServerFactory):
                 port,
                 ssl_ctx
         )
+
+    def stopFactory(self):
+        logger.info('proxy stopped running')
+        self.dispatcher.stopDispatch()
 
     @property
     def sock_id(self):
