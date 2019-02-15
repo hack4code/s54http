@@ -6,7 +6,7 @@ import re
 import struct
 import logging
 
-from twisted.names import client
+from twisted.names import client, dns
 from twisted.internet import reactor, protocol
 from twisted.internet.error import CannotListenError
 
@@ -18,7 +18,6 @@ from utils import (
 
 logger = logging.getLogger(__name__)
 
-_name_cache = Cache()
 _IP = re.compile(r'[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}')
 
 
@@ -62,7 +61,7 @@ class RemoteFactory(protocol.ClientFactory):
 
 class SockProxy:
 
-    def __init__(self, sock_id, dispatcher, host, port):
+    def __init__(self, sock_id, dispatcher, host, port, resolver, addr_cache):
         self.sock_id = sock_id
         self.dispatcher = dispatcher
         self.connected = False
@@ -71,10 +70,11 @@ class SockProxy:
         self.remote_addr = None
         self.remote_port = port
         self.transport = None
+        self.resolver = resolver
+        self.addr_cache = addr_cache
         self.resolveHost(host)
 
     def connectRemote(self):
-        assert self.remote_addr
         factory = RemoteFactory(self)
         reactor.connectTCP(
                 self.remote_addr,
@@ -83,16 +83,27 @@ class SockProxy:
         )
         self.connected = True
 
-    def resolveOk(self, addr):
-        self.remote_addr = addr
+    def resolveOk(self, records):
+        answers = records[0]
+        for answer in answers:
+            if answer.type != dns.A:
+                continue
+            addr = answer.payload.dottedQuad()
+            self.addr_cache[self.remote_host] = addr
+            self.remote_addr = addr
+            break
+        else:
+            self.resolveErr('no ipv4 address found')
+            return
         if not self.connected and len(self.buffer) > 0:
             self.connectRemote()
 
-    def resolveErr(self):
+    def resolveErr(self, reason=''):
         logger.error(
-                'sock_id[%u] resolve host[%s] failed',
+                'sock_id[%u] resolve host[%s] failed[%s]',
                 self.sock_id,
-                self.remote_host
+                self.remote_host,
+                reason
         )
         self.dispatcher.handleConnect(self.sock_id, 1)
 
@@ -101,24 +112,16 @@ class SockProxy:
             self.remote_addr = host
         else:
             try:
-                self.remote_addr = _name_cache[host]
+                self.remote_addr = self.addr_cache[host]
             except KeyError:
-                global resolver
-
                 self.remote_addr = None
-
-                d = resolver.getHostByName(host, effort=2)
-
-                def resolve_ok(addr, proxy):
-                    _name_cache[host] = addr
-                    proxy.resolveOk(addr)
-
-                d.addCallback(resolve_ok, self)
-
-                def resolve_err(res, proxy):
-                    proxy.resolveErr()
-
-                d.addErrback(resolve_err, self)
+                # getHostByName can't used here, it may return ipv6 address
+                self.resolver.lookupAddress(
+                        host
+                ).addCallbacks(
+                        self.resolveOk,
+                        self.resolveErr
+                )
 
     def connectOk(self, transport):
         transport.write(self.buffer)
@@ -158,9 +161,11 @@ class SockProxy:
 
 class SocksDispatcher:
 
-    def __init__(self, transport):
+    def __init__(self, p):
         self.socks = {}
-        self.transport = transport
+        self.transport = p.transport
+        self.resolver = p.factory.resolver
+        self.addr_cache = p.factory.addr_cache
 
     def dispatchMessage(self, message):
         type, = struct.unpack('!B', message[4:5])
@@ -191,7 +196,6 @@ class SocksDispatcher:
                 host,
                 port
         )
-        assert sock_id not in self.socks
         self.socks[sock_id] = SockProxy(
                 sock_id,
                 self,
@@ -342,9 +346,7 @@ class TunnelProtocol(protocol.Protocol):
         self.buffer = self.buffer[length:]
 
 
-def init_resolver(config):
-    global resolver
-
+def create_resolver(config):
     conf = config['dns'].strip()
     if ':' in conf:
         addr, port = conf.split(':')
@@ -352,7 +354,7 @@ def init_resolver(config):
     else:
         addr = conf
         port = 53
-    resolver = client.createResolver(servers=[(addr, port)])
+    return client.createResolver(servers=[(addr, port)])
 
 
 def start_server(config):
@@ -360,6 +362,8 @@ def start_server(config):
     ca, key, cert = config['ca'], config['key'], config['cert']
     factory = protocol.ServerFactory()
     factory.protocol = TunnelProtocol
+    factory.resolver = create_resolver(config)
+    factory.addr_cache = Cache()
     ssl_ctx = SSLCtxFactory(
             False,
             ca,
@@ -379,7 +383,6 @@ def start_server(config):
 def main():
     parse_args(config)
     init_logger(config, logger)
-    init_resolver(config)
     if config['daemon']:
         pidfile = config['pidfile']
         logfile = config['logfile']
