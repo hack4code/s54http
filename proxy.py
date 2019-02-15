@@ -55,6 +55,7 @@ class TunnelProtocol(protocol.Protocol):
 
     def connectionLost(self, reason):
         logger.info('connetion to server lost')
+        self.dispatcher.tunnelClosed()
 
 
 class TunnelFactory(protocol.ClientFactory):
@@ -68,9 +69,13 @@ class TunnelFactory(protocol.ClientFactory):
 class SocksDispatcher:
 
     def __init__(self, addr, port, ssl_ctx):
-        self.transport = None
         self.socks = {}
+        self.transport = None
         self.connectTunnel(addr, port, ssl_ctx)
+
+    @property
+    def isConnected(self):
+        return self.transport is not None
 
     def connectTunnel(self, addr, port, ssl_ctx):
         wrapped = HostnameEndpoint(reactor, addr, port)
@@ -79,7 +84,7 @@ class SocksDispatcher:
         service = ClientService(endpoint, factory)
         waitForConnection = service.whenConnected(failAfterFailures=3)
 
-        def tunnelConnected(p):
+        def connected(p):
             pass
 
         def failed(f):
@@ -87,11 +92,14 @@ class SocksDispatcher:
                 'connect has failed 3 times, proxy will keep connecting'
             )
 
-        waitForConnection.addCallbacks(tunnelConnected, failed)
+        waitForConnection.addCallbacks(connected, failed)
         self.tunnel = service
         service.startService()
 
     def tunnelConnected(self, p):
+        self.transport = p.transport
+
+    def tunnelClosed(self):
         if self.socks:
             old_socks = self.socks
             self.socks = {}
@@ -100,7 +108,7 @@ class SocksDispatcher:
                 if transport is None:
                     continue
                 transport.abortConnection()
-        self.transport = p.transport
+        self.transport = None
 
     def closeSock(self, sock_id, *, abort=False):
         try:
@@ -262,12 +270,16 @@ class SocksDispatcher:
 class Socks5Protocol(protocol.Protocol):
 
     def connectionMade(self):
+        dispatcher = self.factory.dispatcher
+        self.dispatcher = dispatcher
         self.remote_host = None
         self.remote_port = None
         self.state = 'waitHello'
         self.buffer = b''
-        self.dispatcher = self.factory.dispatcher
         self.sock_id = self.factory.sock_id
+        if not dispatcher.isConnected:
+            self.transport.abortConnection()
+            return
 
     def connectionLost(self, reason=None):
         self.dispatcher.closeRemote(self)
