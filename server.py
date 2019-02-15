@@ -115,7 +115,7 @@ class SockProxy:
                 self.remote_addr = self.addr_cache[host]
             except KeyError:
                 self.remote_addr = None
-                # getHostByName can't used here, it may return ipv6 address
+                # getHostByName can't be used here, it may return ipv6 address
                 self.resolver.lookupAddress(
                         host
                 ).addCallbacks(
@@ -258,8 +258,7 @@ class SocksDispatcher:
                 4,
                 sock_id,
         )
-        self.transport.write(header)
-        self.transport.write(data)
+        self.transport.writeSequence([header, data])
 
     def closeSock(self, sock_id, *, abort=False):
         try:
