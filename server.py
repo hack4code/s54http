@@ -328,7 +328,7 @@ class TunnelProtocol(protocol.Protocol):
         self.transport.setTcpNoDelay(True)
         self.transport.setTcpKeepAlive(True)
         self.buffer = b''
-        self.dispatcher = SocksDispatcher(self.transport)
+        self.dispatcher = SocksDispatcher(self)
 
     def connectionLost(self, reason=None):
         logger.info('proxy closed connection')
