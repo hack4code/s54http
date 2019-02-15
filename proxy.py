@@ -35,8 +35,8 @@ logger = logging.getLogger(__name__)
 class TunnelProtocol(protocol.Protocol):
 
     def connectionMade(self):
-        self.transport.setTcpNoDelay(1)
-        self.transport.setTcpKeepAlive(1)
+        # self.transport.setTcpNoDelay(True)
+        self.transport.setTcpKeepAlive(True)
         self.buffer = b''
         self.dispatcher = self.factory.dispatcher
         self.dispatcher.tunnelConnected(self)
