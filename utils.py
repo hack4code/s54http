@@ -101,7 +101,8 @@ def daemonize(pidfile, *,
               stdout='/dev/null',
               stderr='/dev/null'):
     if os.path.exists(pidfile):
-        raise RuntimeError('already running')
+        logger.error('already running')
+        raise SystemExit(1)
 
     try:
         if os.fork() > 0:
