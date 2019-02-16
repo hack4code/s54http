@@ -17,10 +17,7 @@ from utils import (
 
 
 logger = logging.getLogger(__name__)
-
 _IP = re.compile(r'[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}')
-
-
 config = {
         'daemon': False,
         'port': 8080,
@@ -139,7 +136,7 @@ class SockProxy:
         self.dispatcher.handleConnect(self.sock_id, 1)
 
     def sendRemote(self, data):
-        if self.transport is not None:
+        if self.isConnected:
             self.transport.write(data)
             return
         self.buffer += data

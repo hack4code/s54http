@@ -16,6 +16,7 @@ from utils import (
 )
 
 
+logger = logging.getLogger(__name__)
 config = {
         'daemon': False,
         'saddr': '',
@@ -28,8 +29,6 @@ config = {
         'logfile': 'socks.log',
         'loglevel': 'INFO'
 }
-
-logger = logging.getLogger(__name__)
 
 
 class TunnelProtocol(protocol.Protocol):
