@@ -71,6 +71,10 @@ class SockProxy:
         self.addr_cache = dispatcher.addr_cache
         self.resolveHost(host)
 
+    @property
+    def isConnected(self):
+        return self.transport is not None
+
     def connectRemote(self):
         factory = RemoteFactory(self)
         reactor.connectTCP(
