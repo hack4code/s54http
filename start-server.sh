@@ -13,7 +13,7 @@ fi
 if !($DOCKER container ls -a --format '{{.Names}}' | $GREP "$NAME" &>/dev/null)
 then
 	echo "create container ..."
-	$DOCKER run -d --restart=always --name $NAME -p 8080:8080 -v `pwd`/keys/:/s5p/keys/ $NAME
+	$DOCKER run -d --restart=always --name $NAME -p 8080:8080 $NAME
 fi
 
 if !($DOCKER container ls --format '{{.Names}}' | $GREP "$NAME" &>/dev/null)
