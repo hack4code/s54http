@@ -24,8 +24,8 @@ config = {
         'ca': 'keys/ca.crt',
         'key': 'keys/server.key',
         'cert': 'keys/server.crt',
-        'pidfile': 'socks.pid',
-        'logfile': 'socks.log',
+        'pidfile': 's54http.pid',
+        'logfile': 'server.log',
         'loglevel': 'INFO',
         'dns': '8.8.8.8:53',
 }

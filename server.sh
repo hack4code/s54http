@@ -1,8 +1,9 @@
 #! /usr/bin/env bash
 
+
 NAME="s5p"
-DOCKER="docker"
 GREP="grep"
+DOCKER="docker"
 
 if !($DOCKER image ls --format '{{.Repository}}' | $GREP "$NAME" &>/dev/null)
 then

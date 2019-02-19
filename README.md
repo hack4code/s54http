@@ -6,7 +6,7 @@
 python3 server.py -d --key keyfile --cert certfile --ca cafile
 
 ### docker
-start-server.sh
+server.sh
 
 ## Client
 python3 proxy.py -d --key keyfile --cert certfile --ca cafile

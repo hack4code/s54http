@@ -25,8 +25,8 @@ config = {
         'ca': 'keys/ca.crt',
         'key': 'keys/client.key',
         'cert': 'keys/client.crt',
-        'pidfile': 'socks.pid',
-        'logfile': 'socks.log',
+        'pidfile': 's54http.pid',
+        'logfile': 'proxy.log',
         'loglevel': 'INFO'
 }
 
