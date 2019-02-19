@@ -10,7 +10,7 @@ from twisted.names import client, dns
 from twisted.internet import reactor, protocol
 from twisted.internet.error import CannotListenError
 
-from utils import (
+from s54http.utils import (
         SSLCtxFactory, Cache,
         daemonize, parse_args, init_logger,
 )

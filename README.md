@@ -1,12 +1,7 @@
 # socks5 proxy
 
 ##  Server
-
-### python3
-python3 server.py -d --key keyfile --cert certfile --ca cafile
-
-### docker
-server.sh
+s5pserver -d --key keyfile --cert certfile --ca cafile
 
 ## Client
-python3 proxy.py -d --key keyfile --cert certfile --ca cafile
+s5pproxy -d --key keyfile --cert certfile --ca cafile

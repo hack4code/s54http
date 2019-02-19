@@ -17,9 +17,10 @@ setup(
         'service-identity',
         'Twisted',
     ],
-    entry_points="""
-    [console_scripts]
-    s5pproxy = s54http.proxy:main
-    s5pserver = s54http.server:main
-    """
+    entry_points={
+        'console_scripts': [
+            's5pproxy = s54http.proxy:main',
+            's5pserver = s54http.server:main',
+        ]
+    }
 )

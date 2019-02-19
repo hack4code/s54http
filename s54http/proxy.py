@@ -10,7 +10,7 @@ from twisted.internet.error import CannotListenError
 from twisted.application.internet import ClientService
 from twisted.internet.endpoints import wrapClientTLS, HostnameEndpoint
 
-from utils import (
+from s54http.utils import (
         SSLCtxFactory,
         daemonize, parse_args, init_logger
 )
