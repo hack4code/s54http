@@ -154,21 +154,21 @@ def init_logger(config, logger):
 
 
 def parse_args(config):
-    usage = f"usage: {sys.argv[0]} [options]"
+    usage = f"{sys.argv[0].split('/')[-1]}"
     parser = ArgumentParser(usage)
     parser.add_argument(
             "-d",
             "--daemon",
             dest="daemon",
             action="store_true",
-            help="run app at backgroud"
+            help="run as daemon"
     )
     parser.add_argument(
             "-p",
             "--port",
             dest="port",
             type=int,
-            help="proxy listen port"
+            help="listen port"
     )
     parser.add_argument(
             "--key",
@@ -187,36 +187,34 @@ def parse_args(config):
     )
     parser.add_argument(
             "-S",
-            "--saddr",
             dest="saddr",
-            help="server address"
+            help="remote server address"
     )
     parser.add_argument(
             "-P",
-            "--sport",
             dest="sport",
             type=int,
-            help="server listening port"
+            help="remote server port"
     )
     parser.add_argument(
             "--pidfile",
             dest="pidfile",
-            help="pid file path"
+            help="pid file"
     )
     parser.add_argument(
             "--logfile",
             dest="logfile",
-            help="log file path"
+            help="log file"
     )
     parser.add_argument(
             "--loglevel",
             dest="loglevel",
-            help="INFO, WARN, ERROR"
+            help="DEBUG, INFO, WARN, ERROR"
     )
     parser.add_argument(
             "--dns",
             dest="dns",
-            help="host:port"
+            help="dns server host:port"
     )
     args = parser.parse_args()
     for key in config.keys():
