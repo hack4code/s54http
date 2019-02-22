@@ -4,3 +4,4 @@ __pycache__/
 *.pid
 .DS_Store
 env/
+*.egg-info/
