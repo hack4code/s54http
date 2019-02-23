@@ -5,6 +5,7 @@
 import re
 import struct
 import logging
+import weakref
 
 from twisted.names import client, dns
 from twisted.internet import reactor, protocol
@@ -61,14 +62,14 @@ class SockProxy:
     def __init__(self, sock_id, dispatcher, host, port):
         self.sock_id = sock_id
         self.dispatcher = dispatcher
-        self.connected = False
-        self.buffer = b''
         self.remote_host = host
-        self.remote_addr = None
         self.remote_port = port
-        self.transport = None
         self.resolver = dispatcher.resolver
         self.addr_cache = dispatcher.addr_cache
+        self.buffer = b''
+        self.has_connect = False
+        self.remote_addr = None
+        self.transport = None
         self.resolveHost(host)
 
     @property
@@ -76,13 +77,13 @@ class SockProxy:
         return self.transport is not None
 
     def connectRemote(self):
-        factory = RemoteFactory(self)
+        factory = RemoteFactory(weakref.proxy(self))
         reactor.connectTCP(
                 self.remote_addr,
                 self.remote_port,
                 factory
         )
-        self.connected = True
+        self.has_connect = True
 
     def resolveOk(self, records):
         answers = records[0]
@@ -96,7 +97,7 @@ class SockProxy:
         else:
             self.resolveErr('no ipv4 address found')
             return
-        if not self.connected and len(self.buffer) > 0:
+        if not self.has_connect and len(self.buffer) > 0:
             self.connectRemote()
 
     def resolveErr(self, reason=''):
@@ -115,7 +116,6 @@ class SockProxy:
             try:
                 self.remote_addr = self.addr_cache[host]
             except KeyError:
-                self.remote_addr = None
                 # getHostByName can't be used here, it may return ipv6 address
                 self.resolver.lookupAddress(
                         host
@@ -144,7 +144,7 @@ class SockProxy:
             self.transport.write(data)
             return
         self.buffer += data
-        if not self.connected and self.remote_addr is not None:
+        if not self.has_connect and self.remote_addr is not None:
             self.connectRemote()
 
     def recvRemote(self, data):
@@ -239,7 +239,7 @@ class SocksDispatcher:
         try:
             sock = self.socks[sock_id]
         except KeyError:
-            logger.error('sock_id[%u] send data after closed', sock_id)
+            logger.error('sock_id[%u] receive data after closed', sock_id)
         else:
             sock.sendRemote(data)
 
