@@ -181,6 +181,7 @@ class SocksDispatcher:
             self.closeRemote(message)
         else:
             logger.error('receive unknown message type=%u', type)
+            raise RuntimeError(f'receive unknown message type={type}')
 
     def connectRemote(self, message):
         """
