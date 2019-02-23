@@ -54,7 +54,10 @@ class RemoteFactory(protocol.ClientFactory):
         self.proxy.connectErr(message)
 
     def clientConnectionLost(self, connector, reason):
-        self.proxy.connectionClosed()
+        try:
+            self.proxy.connectionClosed()
+        except ReferenceError:
+            pass
 
 
 class SockProxy:
