@@ -414,7 +414,7 @@ class Socks5Factory(protocol.ServerFactory):
         return self._sock_id
 
 
-def start_server(config):
+def serve(config):
     port = config['port']
     remote_addr, remote_port = config['saddr'], config['sport']
     ca, key, cert = config['ca'], config['key'], config['cert']
@@ -451,7 +451,7 @@ def main():
                 stdout=logfile,
                 stderr=logfile
         )
-    start_server(config)
+    serve(config)
 
 
 if __name__ == '__main__':

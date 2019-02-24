@@ -361,7 +361,7 @@ def create_resolver(config):
     return client.createResolver(servers=[(addr, port)])
 
 
-def start_server(config):
+def serve(config):
     port = config['port']
     ca, key, cert = config['ca'], config['key'], config['cert']
     factory = protocol.ServerFactory()
@@ -395,7 +395,7 @@ def main():
             stdout=logfile,
             stderr=logfile
         )
-    start_server(config)
+    serve(config)
 
 
 if __name__ == '__main__':
