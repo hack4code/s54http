@@ -164,6 +164,12 @@ def parse_args(config):
             help="run as daemon"
     )
     parser.add_argument(
+            "-l",
+            "--host",
+            dest="host",
+            help="listen address"
+    )
+    parser.add_argument(
             "-p",
             "--port",
             dest="port",
@@ -214,7 +220,7 @@ def parse_args(config):
     parser.add_argument(
             "--dns",
             dest="dns",
-            help="dns server host:port"
+            help="dns server[addr:port|addr]"
     )
     args = parser.parse_args()
     for key in config.keys():

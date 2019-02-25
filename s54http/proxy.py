@@ -21,6 +21,7 @@ config = {
         'daemon': False,
         'saddr': '',
         'sport': 8080,
+        'host': '127.0.0.1',
         'port': 8080,
         'ca': 'keys/ca.crt',
         'key': 'keys/client.key',
@@ -415,7 +416,7 @@ class Socks5Factory(protocol.ServerFactory):
 
 
 def serve(config):
-    port = config['port']
+    addr, port = config['host'], config['port']
     remote_addr, remote_port = config['saddr'], config['sport']
     ca, key, cert = config['ca'], config['key'], config['cert']
     ssl_ctx = SSLCtxFactory(
@@ -430,7 +431,11 @@ def serve(config):
             ssl_ctx
     )
     try:
-        reactor.listenTCP(port, factory, interface='127.0.0.1')
+        reactor.listenTCP(
+                port,
+                factory,
+                interface=addr
+        )
     except CannotListenError:
         raise RuntimeError(
                 f"couldn't listen on :{port}, address already in use"

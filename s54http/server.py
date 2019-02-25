@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 _IP = re.compile(r'[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}')
 config = {
         'daemon': False,
+        'host': '0.0.0.0',
         'port': 8080,
         'ca': 'keys/ca.crt',
         'key': 'keys/server.key',
@@ -362,7 +363,7 @@ def create_resolver(config):
 
 
 def serve(config):
-    port = config['port']
+    addr, port = config['host'], config['port']
     ca, key, cert = config['ca'], config['key'], config['cert']
     factory = protocol.ServerFactory()
     factory.protocol = TunnelProtocol
@@ -375,7 +376,12 @@ def serve(config):
             cert
     )
     try:
-        reactor.listenSSL(port, factory, ssl_ctx)
+        reactor.listenSSL(
+                port,
+                factory,
+                ssl_ctx,
+                interface=addr,
+        )
     except CannotListenError:
         raise RuntimeError(
                 f"couldn't listen on :{port}, address already in use"
