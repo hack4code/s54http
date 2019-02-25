@@ -7,7 +7,7 @@ DOCKER="docker"
 
 
 if (( $# < 1 )); then
-	echo "build_container.sh server | build_container.sh proxy server_address"
+	echo "usage: build_container.sh server | build_container.sh proxy server_address"
 	exit 1
 fi
 
@@ -15,7 +15,7 @@ ROLE="$1"
 
 if [[ $ROLE == "proxy" ]]; then
 	if (( $# < 2 )); then
-		echo "build proxy container need server address"
+		echo "usage: build_container.sh proxy server_address"
 		exit 1
 	fi
 	SERVER="$2"
