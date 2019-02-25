@@ -17,7 +17,7 @@ setup(
         'service-identity',
         'Twisted',
     ],
-    python_requires=">=3.5",
+    python_requires=">=3.6",
     entry_points={
         'console_scripts': [
             's5pproxy = s54http.proxy:main',
