@@ -40,13 +40,13 @@ class RemoteProtocol(protocol.Protocol):
         try:
             self.proxy.connectOk(self.transport)
         except ReferenceError:
-            pass
+            self.transport.loseConnection()
 
     def dataReceived(self, data):
         try:
             self.proxy.recvRemote(data)
         except ReferenceError:
-            pass
+            self.transport.loseConnection()
 
 
 class RemoteFactory(protocol.ClientFactory):
@@ -292,6 +292,7 @@ class SocksDispatcher:
         else:
             del self.socks[sock_id]
             transport = sock.transport
+            sock.transport = None
             if transport is None:
                 return
             if abort:
