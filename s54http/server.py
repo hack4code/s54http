@@ -37,10 +37,16 @@ class RemoteProtocol(protocol.Protocol):
 
     def connectionMade(self):
         self.proxy = self.factory.proxy
-        self.proxy.connectOk(self.transport)
+        try:
+            self.proxy.connectOk(self.transport)
+        except ReferenceError:
+            pass
 
     def dataReceived(self, data):
-        self.proxy.recvRemote(data)
+        try:
+            self.proxy.recvRemote(data)
+        except ReferenceError:
+            pass
 
 
 class RemoteFactory(protocol.ClientFactory):
@@ -52,13 +58,25 @@ class RemoteFactory(protocol.ClientFactory):
 
     def clientConnectionFailed(self, connector, reason):
         message = reason.getErrorMessage()
-        self.proxy.connectErr(message)
+        try:
+            self.proxy.connectErr(message)
+        except ReferenceError:
+            pass
 
     def clientConnectionLost(self, connector, reason):
         try:
             self.proxy.connectionClosed()
         except ReferenceError:
             pass
+
+
+class NullProxy:
+
+    def __getattr__(self, name):
+        return self
+
+    def __call__(self, *args, **kwargs):
+        return self
 
 
 class SockProxy:
