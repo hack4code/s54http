@@ -18,7 +18,6 @@ from s54http.utils import (
 
 
 logger = logging.getLogger(__name__)
-_IP = re.compile(r'[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}')
 config = {
         'daemon': False,
         'host': '0.0.0.0',
@@ -31,6 +30,7 @@ config = {
         'loglevel': 'INFO',
         'dns': '8.8.8.8:53',
 }
+_IP = re.compile(r'[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}')
 
 
 class RemoteProtocol(protocol.Protocol):
@@ -40,13 +40,13 @@ class RemoteProtocol(protocol.Protocol):
         try:
             self.proxy.connectOk(self.transport)
         except ReferenceError:
-            self.transport.loseConnection()
+            self.transport.abortConnection()
 
     def dataReceived(self, data):
         try:
             self.proxy.recvRemote(data)
         except ReferenceError:
-            self.transport.loseConnection()
+            self.transport.abortConnection()
 
 
 class RemoteFactory(protocol.ClientFactory):
