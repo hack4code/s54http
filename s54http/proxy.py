@@ -112,6 +112,8 @@ class SocksDispatcher:
         self.transport = None
 
     def stopDispatch(self):
+        if self.transport is not None:
+            self.transport.abortConnection()
         self.service.stopService()
 
     def closeSock(self, sock_id, *, abort=False):
