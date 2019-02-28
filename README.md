@@ -8,5 +8,5 @@ s5pproxy -d --key keyfile --cert certfile --ca cafile
 
 
 ## Container
-### build_container.sh server
-### build_container.sh proxy 0.0.0.0
+### ./build\_container.sh server
+### ./build\_container.sh proxy server\_address
