@@ -353,10 +353,20 @@ class TunnelProtocol(protocol.Protocol):
         # self.transport.setTcpKeepAlive(True)
         self.buffer = b''
         self.dispatcher = SocksDispatcher(self)
-        logger.info('proxy[%s] connected to server', self.transport.getPeer())
+        proxy = self.transport.getPeer()
+        logger.info(
+                'proxy[%s:%s] connected to server',
+                proxy.host,
+                proxy.port
+        )
 
     def connectionLost(self, reason=None):
-        logger.info('proxy[%s] lost connection', self.transport.getPeer())
+        proxy = self.transport.getPeer()
+        logger.info(
+                'proxy[%s:%s] lost connection',
+                proxy.host,
+                proxy.port
+        )
         self.dispatcher.tunnelClosed()
 
     def dataReceived(self, data):
