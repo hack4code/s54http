@@ -26,7 +26,7 @@ config = {
         'ca': 'keys/ca.crt',
         'key': 'keys/client.key',
         'cert': 'keys/client.crt',
-        'pidfile': 's54http.pid',
+        'pidfile': 's5p.pid',
         'logfile': 'proxy.log',
         'loglevel': 'INFO'
 }

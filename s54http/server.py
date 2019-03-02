@@ -25,7 +25,7 @@ config = {
         'ca': 'keys/ca.crt',
         'key': 'keys/server.key',
         'cert': 'keys/server.crt',
-        'pidfile': 's54http.pid',
+        'pidfile': 's5p.pid',
         'logfile': 'server.log',
         'loglevel': 'INFO',
         'dns': '8.8.8.8:53',
