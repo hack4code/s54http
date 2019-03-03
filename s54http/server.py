@@ -3,6 +3,7 @@
 
 
 import re
+import gc
 import struct
 import logging
 import weakref
@@ -344,6 +345,9 @@ class SocksDispatcher:
             if transport is None:
                 continue
             transport.abortConnection()
+            sock.transport = None
+        del old_socks
+        gc.collect()
 
 
 class TunnelProtocol(protocol.Protocol):

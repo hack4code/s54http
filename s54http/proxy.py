@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 
+import gc
 import struct
 import logging
 
@@ -109,7 +110,10 @@ class SocksDispatcher:
                 if transport is None:
                     continue
                 transport.abortConnection()
+                sock.transport = None
+            del old_socks
         self.transport = None
+        gc.collect()
 
     def stopDispatch(self):
         if self.transport is not None:
