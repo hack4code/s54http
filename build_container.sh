@@ -38,9 +38,9 @@ docker build -t $NAME .
 
 echo "build $ROLE container ..."
 if [[ "$ROLE" == "server" ]]; then
-	docker create --restart=always --name $NAME -p 8080:8080 $NAME s5pserver
+	docker create --restart=always --name $NAME --net=host $NAME s5pserver
 elif [[ "$ROLE" == "proxy" ]]; then
-	docker create --restart=always --name $NAME -p 127.0.0.1:8080:8080 $NAME s5pproxy -l 0.0.0.0 -S $SERVER
+	docker create --restart=always --name $NAME --net=host $NAME s5pproxy -S $SERVER
 else
 	echo "only support server|proxy container"
 	exit 1
