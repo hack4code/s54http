@@ -102,17 +102,18 @@ class SocksDispatcher:
         self.transport = p.transport
 
     def tunnelClosed(self):
-        if self.socks:
-            old_socks = self.socks
-            self.socks = {}
-            for sock in old_socks.values():
-                transport = sock.transport
-                if transport is None:
-                    continue
-                transport.abortConnection()
-                sock.transport = None
-            del old_socks
         self.transport = None
+        if not self.socks:
+            return
+        old_socks = self.socks
+        self.socks = {}
+        for sock in old_socks.values():
+            transport = sock.transport
+            if transport is None:
+                continue
+            transport.abortConnection()
+            sock.transport = None
+        del old_socks
         gc.collect()
 
     def stopDispatch(self):
