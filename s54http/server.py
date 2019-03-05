@@ -29,7 +29,7 @@ config = {
         'pidfile': 's5p.pid',
         'logfile': 'server.log',
         'loglevel': 'INFO',
-        'dns': '8.8.8.8:53',
+        'dns': '',
 }
 _IP = re.compile(r'[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}')
 
@@ -386,14 +386,16 @@ class TunnelProtocol(protocol.Protocol):
 
 
 def create_resolver(config):
-    conf = config['dns'].strip()
-    if ':' in conf:
-        addr, port = conf.split(':')
+    dns = config['dns'].strip()
+    if not dns:
+        servers = None
+    elif ':' in dns:
+        addr, port = dns.split(':')
         port = int(port)
+        servers = [(addr, port)]
     else:
-        addr = conf
-        port = 53
-    return client.createResolver(servers=[(addr, port)])
+        servers = [(dns, 53)]
+    return client.createResolver(servers=servers)
 
 
 def serve(config):
