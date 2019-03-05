@@ -20,14 +20,14 @@ if [[ $ROLE == "proxy" ]]; then
 fi
 
 
-if (docker container ls -a --format '{{.Names}}' | grep "$NAME" &>/dev/null)
+if (docker container ls -a --format '{{.Names}}' | grep -q "$NAME")
 then
 	echo "rm container ..."
 	docker container stop "$NAME"
 	docker container rm "$NAME"
 fi
 
-if (docker image ls --format '{{.Repository}}' | grep "$NAME" &>/dev/null)
+if (docker image ls --format '{{.Repository}}' | grep -q "$NAME")
 then
 	echo "rm image ..."
 	docker image rm "$NAME"
