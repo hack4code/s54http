@@ -103,7 +103,6 @@ class SockProxy:
         self.dispatcher = None
         self.buffer = None
         self.resolver = None
-        self.addr_cache = None
         self.remote_addr = None
         self.remote_host = None
         self.remote_port = None
