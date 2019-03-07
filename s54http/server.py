@@ -13,7 +13,7 @@ from twisted.internet import reactor, protocol
 from twisted.internet.error import CannotListenError
 
 from s54http.utils import (
-        SSLCtxFactory, Cache,
+        SSLCtxFactory, Cache, NullProxy,
         daemonize, parse_args, init_logger,
 )
 
@@ -91,7 +91,7 @@ class SockProxy:
         return self.transport is not None
 
     def close(self, *, abort=True):
-        self.dispatcher = None
+        self.dispatcher = NullProxy()
         self.buffer = b''
         self.resolver = None
         self.remote_addr = None
@@ -102,7 +102,7 @@ class SockProxy:
                 self.transport.abortConnection()
             else:
                 self.transport.loseConnection()
-            self.transport = None
+            self.transport = NullProxy()
 
     def connectRemote(self):
         factory = RemoteFactory(weakref.proxy(self))
