@@ -101,7 +101,7 @@ class SockProxy:
 
     def close(self, *, abort=True):
         self.dispatcher = None
-        self.buffer = None
+        self.buffer = b''
         self.resolver = None
         self.remote_addr = None
         self.remote_host = None
