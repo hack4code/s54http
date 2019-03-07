@@ -13,7 +13,7 @@ from twisted.application.internet import ClientService
 from twisted.internet.endpoints import wrapClientTLS, HostnameEndpoint
 
 from s54http.utils import (
-        SSLCtxFactory,
+        SSLCtxFactory, NullProxy,
         daemonize, parse_args, init_logger
 )
 
@@ -103,8 +103,7 @@ class SocksDispatcher:
         self.transport = p.transport
 
     def tunnelClosed(self):
-        self.transport.abortConnection()
-        self.transport = None
+        self.transport = NullProxy()
         if not self.socks:
             return
         old_socks = self.socks
@@ -121,7 +120,7 @@ class SocksDispatcher:
         if self.transport is not None:
             self.closeTunnel()
             self.transport.loseConnection()
-            self.transport = None
+            self.transport = NullProxy()
         self.service.stopService()
 
     def closeSock(self, sock_id, *, abort=False):

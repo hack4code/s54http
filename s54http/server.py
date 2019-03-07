@@ -71,15 +71,6 @@ class RemoteFactory(protocol.ClientFactory):
             pass
 
 
-class NullProxy:
-
-    def __getattr__(self, name):
-        return self
-
-    def __call__(self, *args, **kwargs):
-        return self
-
-
 class SockProxy:
 
     def __init__(self, sock_id, dispatcher, host, port):

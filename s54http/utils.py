@@ -16,6 +16,7 @@ from OpenSSL import SSL as ssl
 __all__ = [
         'Cache',
         'SSLCtxFactory',
+        'NullProxy',
         'daemonize',
         'init_logger',
         'parse_args',
@@ -23,6 +24,15 @@ __all__ = [
 
 
 logger = logging.getLogger(__name__)
+
+
+class NullProxy:
+
+    def __getattr__(self, name):
+        return self
+
+    def __call__(self, *args, **kwargs):
+        return self
 
 
 class SSLCtxFactory:
