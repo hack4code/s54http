@@ -4,7 +4,6 @@
 import os
 import sys
 import atexit
-import signal
 import logging
 from pathlib import Path
 from argparse import ArgumentParser
@@ -143,12 +142,6 @@ def daemonize(pidfile, *,
         print(os.getpid(), file=f)
 
     atexit.register(lambda: os.remove(pidfile))
-
-    def sigterm_handler(signo, frame):
-        os.remove(pidfile)
-        raise SystemExit(1)
-
-    signal.signal(signal.SIGTERM, sigterm_handler)
 
 
 def init_logger(config, logger):

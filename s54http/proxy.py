@@ -2,7 +2,9 @@
 # -*- coding: utf-8 -*-
 
 
+import os
 import gc
+import signal
 import struct
 import logging
 import weakref
@@ -427,8 +429,7 @@ class Socks5Factory(protocol.ServerFactory):
                 ssl_ctx
         )
 
-    def stopFactory(self):
-        logger.info('proxy stopped running')
+    def signal(self, signo, frame):
         self.dispatcher.stopDispatch()
 
     @property
@@ -454,6 +455,14 @@ def serve(config):
             remote_port,
             ssl_ctx
     )
+
+    def sigterm_handler(signo, frame):
+        logger.info('proxy killed by %u', signo)
+        factory.signal(signal, frame)
+        if config['daemon']:
+            os.remove(config['pidfile'])
+
+    signal.signal(signal.SIGTERM, sigterm_handler)
     try:
         reactor.listenTCP(
                 port,
