@@ -99,6 +99,21 @@ class SockProxy:
     def isConnected(self):
         return self.transport is not None
 
+    def close(self, *, abort=True):
+        self.dispatcher = None
+        self.buffer = None
+        self.resolver = None
+        self.addr_cache = None
+        self.remote_addr = None
+        self.remote_host = None
+        self.remote_port = None
+        if self.transport:
+            if abort:
+                self.transport.abortConnection()
+            else:
+                self.transport.loseConnection()
+            self.transport = None
+
     def connectRemote(self):
         factory = RemoteFactory(weakref.proxy(self))
         reactor.connectTCP(
@@ -199,8 +214,9 @@ class SocksDispatcher:
             self.sendRemote(message)
         elif 5 == type:
             self.closeRemote(message)
+        elif 7 == type:
+            self.closeTunnel()
         else:
-            logger.error('receive unknown message type=%u', type)
             raise RuntimeError(f'receive unknown message type={type}')
 
     def connectRemote(self, message):
@@ -291,15 +307,8 @@ class SocksDispatcher:
         except KeyError:
             logger.error('sock_id[%u] closed again', sock_id)
         else:
+            sock.close(abort=abort)
             del self.socks[sock_id]
-            transport = sock.transport
-            sock.transport = None
-            if transport is None:
-                return
-            if abort:
-                transport.abortConnection()
-            else:
-                transport.loseConnection()
 
     def closeRemote(self, message):
         """
@@ -335,18 +344,30 @@ class SocksDispatcher:
         )
         self.transport.write(message)
 
+    def closeTunnel(self):
+        """
+        type 7:
+        +-----+------+
+        | LEN | TYPE |
+        +-----+------+
+        |  4  |   1  |
+        +-----+------+
+        """
+        proxy = self.transport.getPeer()
+        logger.info(
+                'proxy[%s:%s] closed tunnel',
+                proxy.host,
+                proxy.port
+        )
+        self.transport.loseConnection()
+
     def tunnelClosed(self):
+        self.transport = None
         if not self.socks:
             return
-        old_socks = self.socks
+        for sock in self.socks.values():
+            sock.close(abort=True)
         self.socks = {}
-        for sock in old_socks.values():
-            transport = sock.transport
-            if transport is None:
-                continue
-            transport.abortConnection()
-            sock.transport = None
-        del old_socks
         gc.collect()
 
 

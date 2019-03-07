@@ -5,6 +5,7 @@
 import gc
 import struct
 import logging
+import weakref
 
 from twisted.internet import reactor, protocol
 from twisted.internet.error import CannotListenError
@@ -102,6 +103,7 @@ class SocksDispatcher:
         self.transport = p.transport
 
     def tunnelClosed(self):
+        self.transport.abortConnection()
         self.transport = None
         if not self.socks:
             return
@@ -109,16 +111,17 @@ class SocksDispatcher:
         self.socks = {}
         for sock in old_socks.values():
             transport = sock.transport
-            if transport is None:
-                continue
-            transport.abortConnection()
-            sock.transport = None
+            if transport is not None:
+                transport.abortConnection()
+                sock.transport = None
         del old_socks
         gc.collect()
 
     def stopDispatch(self):
         if self.transport is not None:
-            self.transport.abortConnection()
+            self.closeTunnel()
+            self.transport.loseConnection()
+            self.transport = None
         self.service.stopService()
 
     def closeSock(self, sock_id, *, abort=False):
@@ -278,12 +281,28 @@ class SocksDispatcher:
         logger.info('sock_id[%u] remote closed', sock_id)
         self.closeSock(sock_id, abort=True)
 
+    def closeTunnel(self):
+        """
+        type 7:
+        +-----+------+
+        | LEN | TYPE |
+        +-----+------+
+        |  4  |   1  |
+        +-----+------+
+        """
+        message = struct.pack(
+                '!IB',
+                5,
+                7
+        )
+        self.transport.write(message)
+
 
 class Socks5Protocol(protocol.Protocol):
 
     def connectionMade(self):
         dispatcher = self.factory.dispatcher
-        self.dispatcher = dispatcher
+        self.dispatcher = weakref.proxy(dispatcher)
         self.remote_host = None
         self.remote_port = None
         self.state = 'waitHello'
