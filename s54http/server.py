@@ -107,7 +107,7 @@ class SockProxy:
                 self.transport.abortConnection()
             else:
                 self.transport.loseConnection()
-            self.transport = NullProxy()
+        self.transport = NullProxy()
 
     def connectRemote(self):
         factory = RemoteFactory(weakref.proxy(self))
@@ -357,9 +357,7 @@ class SocksDispatcher:
         self.transport.loseConnection()
 
     def tunnelClosed(self):
-        self.transport = None
-        if not self.socks:
-            return
+        self.transport = NullProxy()
         for sock in self.socks.values():
             sock.close(abort=True)
         self.socks = {}
