@@ -88,7 +88,12 @@ class SockProxy:
 
     @property
     def isConnected(self):
-        return self.transport is not None
+        transport = self.transport
+        if transport is None:
+            return False
+        if isinstance(transport, NullProxy):
+            return False
+        return True
 
     def close(self, *, abort=True):
         self.dispatcher = NullProxy()

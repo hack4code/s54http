@@ -78,7 +78,12 @@ class SocksDispatcher:
 
     @property
     def isConnected(self):
-        return self.transport is not None
+        transport = self.transport
+        if transport is None:
+            return False
+        if isinstance(transport, NullProxy):
+            return False
+        return True
 
     def connectTunnel(self, addr, port, ssl_ctx):
         wrapped = HostnameEndpoint(reactor, addr, port)
