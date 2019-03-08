@@ -3,9 +3,7 @@
 
 
 import re
-import os
 import gc
-import signal
 import struct
 import logging
 import weakref
@@ -424,12 +422,6 @@ def serve(config):
             key,
             cert
     )
-
-    def sigterm_handler(signo, frame):
-        if config['daemon']:
-            os.remove(config['pidfile'])
-
-    signal.signal(signal.SIGTERM, sigterm_handler)
     try:
         reactor.listenSSL(
                 port,

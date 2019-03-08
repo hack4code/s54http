@@ -131,15 +131,15 @@ def daemonize(pidfile, *,
     sys.stdin.flush()
     sys.stdout.flush()
 
-    with open(stdin, 'rb', 0) as f:
-        os.dup2(f.fileno(), sys.stdin.fileno())
-    with open(stdout, 'ab', 0) as f:
-        os.dup2(f.fileno(), sys.stdout.fileno())
-    with open(stderr, 'ab', 0) as f:
-        os.dup2(f.fileno(), sys.stderr.fileno())
+    with open(stdin, 'rb', 0) as fp:
+        os.dup2(fp.fileno(), sys.stdin.fileno())
+    with open(stdout, 'ab', 0) as fp:
+        os.dup2(fp.fileno(), sys.stdout.fileno())
+    with open(stderr, 'ab', 0) as fp:
+        os.dup2(fp.fileno(), sys.stderr.fileno())
 
-    with open(pidfile, 'w') as f:
-        print(os.getpid(), file=f)
+    with open(pidfile, 'w') as fp:
+        print(os.getpid(), file=fp)
 
     atexit.register(lambda: os.remove(pidfile))
 

@@ -2,9 +2,7 @@
 # -*- coding: utf-8 -*-
 
 
-import os
 import gc
-import signal
 import struct
 import logging
 import weakref
@@ -429,7 +427,7 @@ class Socks5Factory(protocol.ServerFactory):
                 ssl_ctx
         )
 
-    def signal(self, signo, frame):
+    def shutdown(self):
         self.dispatcher.stopDispatch()
 
     @property
@@ -456,13 +454,16 @@ def serve(config):
             ssl_ctx
     )
 
-    def sigterm_handler(signo, frame):
-        logger.info('proxy killed by %u', signo)
-        factory.signal(signal, frame)
-        if config['daemon']:
-            os.remove(config['pidfile'])
+    def shutdown():
+        logger.info('proxy stop running')
+        factory.shutdown()
 
-    signal.signal(signal.SIGTERM, sigterm_handler)
+    reactor.addSystemEventTrigger(
+            'before',
+            'shutdown',
+            shutdown
+    )
+
     try:
         reactor.listenTCP(
                 port,
