@@ -368,7 +368,7 @@ class TunnelProtocol(protocol.Protocol):
 
     def connectionMade(self):
         self.transport.setTcpNoDelay(True)
-        self.transport.setTcpKeepAlive(False)
+        self.transport.setTcpKeepAlive(True)
         self.buffer = b''
         self.dispatcher = SocksDispatcher(self)
         proxy = self.transport.getPeer()
