@@ -80,6 +80,7 @@ class SSLCtxFactory:
         ctx.use_privatekey_file(self._key)
         ctx.check_privatekey()
         ctx.load_verify_locations(self._ca)
+        ctx.set_cipher_list('ECDHE-RSA-AES128-GCM-SHA256')
         ctx.set_verify(
                 ssl.VERIFY_PEER |
                 ssl.VERIFY_FAIL_IF_NO_PEER_CERT |
