@@ -42,24 +42,18 @@ class SSLCtxFactory:
 
     method = ssl.TLSv1_2_METHOD
 
-    def __init__(self, client, ca, key, cert):
+    def __init__(self, client, ca, key, cert, callback=None):
         self.isClient = client
         self._ca = ca
         self._key = key
         self._cert = cert
         self._ctx = None
+        if callback is None:
+            def verify(conn, x509, errno, errdepth, ok):
+                return ok
+            callback = verify
+        self._callback = callback
         self.cacheContext()
-
-    def _verify(self, conn, x509, errno, errdepth, ok):
-        if not ok:
-            if self.isClient:
-                peer = 'server'
-            else:
-                peer = 'client'
-            cn = x509.get_subject().commonName
-            # logger seems not worked here
-            print(f'{peer} certificate verify error[errno={errno} cn={cn}]')
-        return ok
 
     def cacheContext(self):
         if self._ctx is not None:
@@ -78,7 +72,7 @@ class SSLCtxFactory:
                 ssl.VERIFY_PEER |
                 ssl.VERIFY_FAIL_IF_NO_PEER_CERT |
                 ssl.VERIFY_CLIENT_ONCE,
-                self._verify
+                self._callback
         )
         self._ctx = ctx
 

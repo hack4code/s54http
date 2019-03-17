@@ -446,11 +446,23 @@ def serve(config):
     addr, port = config['host'], config['port']
     remote_addr, remote_port = config['saddr'], config['sport']
     ca, key, cert = config['ca'], config['key'], config['cert']
+
+    def verify(conn, x509, errno, errdepth, ok):
+        if not ok:
+            cn = x509.get_subject().commonName
+            logger.info(
+                    'server certificate verify error[errno=%d cn=%s]',
+                    errno,
+                    cn
+            )
+        return ok
+
     ssl_ctx = SSLCtxFactory(
             True,
             ca,
             key,
             cert,
+            callback=verify
     )
     factory = Socks5Factory(
             remote_addr,

@@ -419,11 +419,23 @@ def serve(config):
     factory.protocol = TunnelProtocol
     factory.resolver = create_resolver(config)
     factory.addr_cache = Cache()
+
+    def verify(conn, x509, errno, errdepth, ok):
+        if not ok:
+            cn = x509.get_subject().commonName
+            logger.info(
+                    'proxy certificate verify error[errno=%d cn=%s]',
+                    errno,
+                    cn
+            )
+        return ok
+
     ssl_ctx = SSLCtxFactory(
             False,
             ca,
             key,
-            cert
+            cert,
+            callback=verify
     )
     try:
         reactor.listenSSL(
