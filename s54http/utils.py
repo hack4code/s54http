@@ -44,13 +44,13 @@ class NullProxy:
 class SSLCtxFactory:
 
     method = ssl.TLSv1_2_METHOD
-    _ctx = None
 
     def __init__(self, client, ca, key, cert):
         self.isClient = client
         self._ca = ca
         self._key = key
         self._cert = cert
+        self._ctx = None
         self.cacheContext()
 
     def _verify(self, conn, x509, errno, errdepth, ok):
