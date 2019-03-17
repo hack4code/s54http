@@ -109,16 +109,15 @@ class SocksDispatcher:
 
     def tunnelClosed(self):
         self.transport = NullProxy()
-        if not self.socks:
-            return
-        old_socks = self.socks
-        self.socks = {}
-        for sock in old_socks.values():
-            transport = sock.transport
-            if transport is not None:
-                transport.abortConnection()
-                sock.transport = None
-        del old_socks
+        if self.socks:
+            old_socks = self.socks
+            self.socks = {}
+            for sock in old_socks.values():
+                transport = sock.transport
+                if transport is not None:
+                    transport.abortConnection()
+                    sock.transport = None
+            del old_socks
         gc.collect()
 
     def stopDispatch(self):
