@@ -22,9 +22,6 @@ __all__ = [
 ]
 
 
-logger = logging.getLogger(__name__)
-
-
 class NullProxy:
 
     _instance = None
@@ -60,12 +57,8 @@ class SSLCtxFactory:
             else:
                 peer = 'client'
             cn = x509.get_subject().commonName
-            logger.error(
-                    '%s verify failed errno=%d cn=%s',
-                    peer,
-                    errno,
-                    cn
-            )
+            # logger seems not worked here
+            print(f'{peer} certificate verify error[errno={errno} cn={cn}]')
         return ok
 
     def cacheContext(self):
@@ -118,7 +111,7 @@ def daemonize(pidfile, *,
               stdout='/dev/null',
               stderr='/dev/null'):
     if os.path.exists(pidfile):
-        logger.error('already running')
+        logging.getLogger(__name__).info('already running')
         raise SystemExit(1)
 
     try:
