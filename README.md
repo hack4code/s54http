@@ -4,7 +4,7 @@
 s5pserver -d --key keyfile --cert certfile --ca cafile
 
 ## Client
-s5pproxy -d --key keyfile --cert certfile --ca cafile
+s5pproxy -d -S server\_address --key keyfile --cert certfile --ca cafile
 
 
 ## Container
