@@ -26,10 +26,11 @@ config = {
         'ca': 'keys/ca.crt',
         'key': 'keys/server.key',
         'cert': 'keys/server.crt',
+        'dhparam': 'keys/dhparam.pem',
         'pidfile': 's5p.pid',
         'logfile': 'server.log',
         'loglevel': 'INFO',
-        'dns': '',
+        'dns': None,
 }
 _IP = re.compile(r'[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}')
 
@@ -400,21 +401,25 @@ class TunnelProtocol(protocol.Protocol):
 
 
 def create_resolver(config):
-    dns = config['dns'].strip()
-    if not dns:
+    dns = config['dns']
+    if dns is None:
         servers = None
-    elif ':' in dns:
-        addr, port = dns.split(':')
-        port = int(port)
-        servers = [(addr, port)]
     else:
-        servers = [(dns, 53)]
+        dns = dns.strip()
+        if not dns:
+            servers = None
+        elif ':' in dns:
+            addr, port = dns.split(':')
+            servers = [(addr, int(port))]
+        else:
+            servers = [(dns, 53)]
     return client.createResolver(servers=servers)
 
 
 def serve(config):
     addr, port = config['host'], config['port']
     ca, key, cert = config['ca'], config['key'], config['cert']
+    dhparam = config['dhparam']
     factory = protocol.ServerFactory()
     factory.protocol = TunnelProtocol
     factory.resolver = create_resolver(config)
@@ -435,6 +440,7 @@ def serve(config):
             ca,
             key,
             cert,
+            dhparam=dhparam,
             callback=verify
     )
     try:

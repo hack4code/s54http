@@ -28,6 +28,7 @@ config = {
         'ca': 'keys/ca.crt',
         'key': 'keys/client.key',
         'cert': 'keys/client.crt',
+        'dhparam': 'keys/dhparam.pem',
         'pidfile': 's5p.pid',
         'logfile': 'proxy.log',
         'loglevel': 'INFO'
@@ -446,6 +447,7 @@ def serve(config):
     addr, port = config['host'], config['port']
     remote_addr, remote_port = config['saddr'], config['sport']
     ca, key, cert = config['ca'], config['key'], config['cert']
+    dhparam = config['dhparam']
 
     def verify(conn, x509, errno, errdepth, ok):
         if not ok:
@@ -462,6 +464,7 @@ def serve(config):
             ca,
             key,
             cert,
+            dhparam=dhparam,
             callback=verify
     )
     factory = Socks5Factory(

@@ -42,11 +42,12 @@ class SSLCtxFactory:
 
     method = ssl.TLSv1_2_METHOD
 
-    def __init__(self, client, ca, key, cert, callback=None):
+    def __init__(self, client, ca, key, cert, *, dhparam=None, callback=None):
         self.isClient = client
         self._ca = ca
         self._key = key
         self._cert = cert
+        self._dhparam = dhparam
         self._ctx = None
         if callback is None:
             def verify(conn, x509, errno, errdepth, ok):
@@ -67,6 +68,8 @@ class SSLCtxFactory:
         ctx.use_privatekey_file(self._key)
         ctx.check_privatekey()
         ctx.load_verify_locations(self._ca)
+        if self._dhparam:
+            ctx.load_tmp_dh(self._dhparam)
         ctx.set_cipher_list('ECDHE-RSA-AES128-GCM-SHA256')
         ctx.set_verify(
                 ssl.VERIFY_PEER |
@@ -190,15 +193,20 @@ def parse_args(config):
             help="cert file path"
     )
     parser.add_argument(
+            "--dhparam",
+            dest="dhparam",
+            help="dhparam file path"
+    )
+    parser.add_argument(
             "-S",
             dest="saddr",
-            help="remote server address"
+            help="server address"
     )
     parser.add_argument(
             "-P",
             dest="sport",
             type=int,
-            help="remote server port"
+            help="server port"
     )
     parser.add_argument(
             "--pidfile",
@@ -226,9 +234,12 @@ def parse_args(config):
         if not value:
             continue
         config[key] = value
-    for key in ('ca', 'key', 'cert', 'pidfile', 'logfile'):
+    PATH_KEYS = ['ca', 'key', 'cert', 'dhparam', 'pidfile', 'logfile']
+    for key in PATH_KEYS:
         value = config[key]
         fp = Path(value)
         config[key] = str(fp.absolute())
+        if key == 'dhparam' and not fp.exists():
+            config[key] = None
         if key in ('ca', 'key', 'cert') and not fp.exists():
             raise RuntimeError(f'{key} file not existed')
