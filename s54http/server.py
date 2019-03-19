@@ -78,7 +78,8 @@ class SockProxy:
             'sock_id', 'dispatcher',
             'remote_host', 'remote_port', 'remote_addr',
             'resolver', 'addr_cache',
-            'buffer', 'has_connect', 'transport'
+            'buffer', 'has_connect', 'transport',
+            '__weakref__'
     )
 
     def __init__(self, sock_id, dispatcher, host, port):
