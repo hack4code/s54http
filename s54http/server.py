@@ -74,6 +74,13 @@ class RemoteFactory(protocol.ClientFactory):
 
 class SockProxy:
 
+    __slots__ = (
+            'sock_id', 'dispatcher',
+            'remote_host', 'remote_port', 'remote_addr',
+            'resolver', 'addr_cache',
+            'buffer', 'has_connect', 'transport'
+    )
+
     def __init__(self, sock_id, dispatcher, host, port):
         self.sock_id = sock_id
         self.dispatcher = dispatcher
