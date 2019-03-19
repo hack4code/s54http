@@ -361,21 +361,23 @@ class Socks5Protocol(protocol.Protocol):
         )
         if version != 5:
             logger.error('unsupported version %u', version)
-            self.transport.abortConnection()
+            self.sendConnectReply(2)
+            self.transport.loseConnection()
             return
         if reserved != 0:
             logger.error('reserved value not 0')
-            self.transport.abortConnection()
+            self.sendConnectReply(2)
+            self.transport.loseConnection()
             return
         if command != 1:
             logger.error('unsupported command %u', command)
             self.sendConnectReply(7)
-            self.transport.abortConnection()
+            self.transport.loseConnection()
             return
         if atyp not in (1, 3):
             logger.error('unsupported atyp %u', atyp)
             self.sendConnectReply(8)
-            self.transport.abortConnection()
+            self.transport.loseConnection()
             return
         if atyp == 1:
             if len(self.buffer) < 10:
