@@ -57,7 +57,7 @@ class TunnelProtocol(protocol.Protocol):
         self.buffer = self.buffer[length:]
 
     def connectionLost(self, reason):
-        logger.error('connetion to server lost')
+        logger.info('connetion to server lost')
         self.dispatcher.tunnelClosed()
 
 
