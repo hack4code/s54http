@@ -9,8 +9,9 @@ import logging
 import weakref
 
 from twisted.names import client, dns
-from twisted.internet import reactor, protocol
+from zope.interface import implementer
 from twisted.internet.error import CannotListenError
+from twisted.internet import reactor, protocol, interfaces
 
 from s54http.utils import (
         SSLCtxFactory, Cache, NullProxy,
@@ -201,6 +202,16 @@ class SockProxy:
         )
         self.dispatcher.handleClose(self.sock_id)
 
+    def pauseProducing(self):
+        if self.transport is None:
+            return
+        self.transport.pauseProducing()
+
+    def resumeProducing(self):
+        if self.transport is None:
+            return
+        self.transport.resumeProducing()
+
 
 class SocksDispatcher:
 
@@ -373,13 +384,36 @@ class SocksDispatcher:
         gc.collect()
 
 
+@implementer(interfaces.IPushProducer)
+class Producer:
+
+    def __init__(self, dispatcher):
+        self.dispatcher = dispatcher
+
+    def pauseProducing(self):
+        logger.info('remote socks pause receiving data')
+        for sock in self.dispatcher.socks.values():
+            sock.pauseProducing()
+
+    def resumeProducing(self):
+        logger.info('remote socks resume receiving data')
+        for sock in self.dispatcher.socks.values():
+            sock.resumeProducing()
+
+    def stopProducing(self):
+        pass
+
+
 class TunnelProtocol(protocol.Protocol):
 
     def connectionMade(self):
+        dispatcher = SocksDispatcher(self)
+        producer = Producer(dispatcher)
+        self.buffer = b''
+        self.dispatcher = dispatcher
         self.transport.setTcpNoDelay(True)
         self.transport.setTcpKeepAlive(True)
-        self.buffer = b''
-        self.dispatcher = SocksDispatcher(self)
+        self.transport.registerProducer(producer, True)
         proxy = self.transport.getPeer()
         logger.info(
                 'proxy[%s:%s] connected to server',
@@ -394,6 +428,7 @@ class TunnelProtocol(protocol.Protocol):
                 proxy.host,
                 proxy.port
         )
+        self.transport.unregisterProducer()
         self.dispatcher.tunnelClosed()
 
     def dataReceived(self, data):
