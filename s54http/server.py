@@ -391,12 +391,12 @@ class Producer:
         self.dispatcher = dispatcher
 
     def pauseProducing(self):
-        logger.info('remote socks pause receiving data')
+        logger.debug('remote socks pause receiving data')
         for sock in self.dispatcher.socks.values():
             sock.pauseProducing()
 
     def resumeProducing(self):
-        logger.info('remote socks resume receiving data')
+        logger.debug('remote socks resume receiving data')
         for sock in self.dispatcher.socks.values():
             sock.resumeProducing()
 
