@@ -140,7 +140,7 @@ class SockProxy:
         else:
             self.resolveErr('no ipv4 address found')
             return
-        if not self.has_connect and len(self.buffer) > 0:
+        if not self.has_connect:
             self.connectRemote()
 
     def resolveErr(self, reason=''):
@@ -166,6 +166,8 @@ class SockProxy:
                         self.resolveOk,
                         self.resolveErr
                 )
+                return
+        self.connectRemote()
 
     def connectOk(self, transport):
         transport.write(self.buffer)
@@ -185,10 +187,8 @@ class SockProxy:
     def sendRemote(self, data):
         if self.isConnected:
             self.transport.write(data)
-            return
-        self.buffer += data
-        if not self.has_connect and self.remote_addr is not None:
-            self.connectRemote()
+        else:
+            self.buffer += data
 
     def recvRemote(self, data):
         self.dispatcher.handleRemote(self.sock_id, data)
@@ -370,7 +370,7 @@ class SocksDispatcher:
         """
         proxy = self.transport.getPeer()
         logger.info(
-                'proxy[%s:%s] closed tunnel',
+                'proxy[%s:%u] closed tunnel',
                 proxy.host,
                 proxy.port
         )
@@ -416,7 +416,7 @@ class TunnelProtocol(protocol.Protocol):
         self.transport.registerProducer(producer, True)
         proxy = self.transport.getPeer()
         logger.info(
-                'proxy[%s:%s] connected to server',
+                'proxy[%s:%u] connected to server',
                 proxy.host,
                 proxy.port
         )
@@ -424,7 +424,7 @@ class TunnelProtocol(protocol.Protocol):
     def connectionLost(self, reason=None):
         proxy = self.transport.getPeer()
         logger.info(
-                'proxy[%s:%s] lost connection',
+                'proxy[%s:%u] lost connection',
                 proxy.host,
                 proxy.port
         )
