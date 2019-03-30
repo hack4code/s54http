@@ -120,6 +120,7 @@ class SockProxy:
         self.transport = NullProxy()
 
     def connectRemote(self):
+        assert self.remote_addr is not None
         factory = RemoteFactory(weakref.proxy(self))
         reactor.connectTCP(
                 self.remote_addr,
@@ -133,15 +134,13 @@ class SockProxy:
         for answer in answers:
             if answer.type != dns.A:
                 continue
-            addr = answer.payload.dottedQuad()
+            addr = answer.payload.dottedQuad().strip()
             self.addr_cache[self.remote_host] = addr
             self.remote_addr = addr
+            self.connectRemote()
             break
         else:
             self.resolveErr('no ipv4 address found')
-            return
-        if not self.has_connect:
-            self.connectRemote()
 
     def resolveErr(self, reason=''):
         logger.error(
