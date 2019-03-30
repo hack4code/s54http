@@ -411,12 +411,12 @@ class Socks5Protocol(protocol.Protocol):
         self.transport.write(response)
 
     def connectRemote(self, host, port):
+        self.sendConnectReply(0)
         self.remote_host = host.decode('utf-8').strip()
         self.remote_port = port
-        self.dispatcher.connectRemote(self, host, port)
-        self.sendConnectReply(0)
         self.buffer = b''
         self.state = 'sendRemote'
+        self.dispatcher.connectRemote(self, host, port)
 
     def sendRemote(self, data):
         self.dispatcher.sendRemote(self, data)
