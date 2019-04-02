@@ -478,7 +478,7 @@ def _create_ssl_context(config):
     def verify(conn, x509, errno, errdepth, ok):
         if not ok:
             cn = x509.get_subject().commonName
-            logger.info(
+            logger.error(
                     'proxy certificate verify error[errno=%d cn=%s]',
                     errno,
                     cn
