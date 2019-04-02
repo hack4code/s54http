@@ -465,10 +465,8 @@ def _create_ssl_context(config):
     def verify(conn, x509, errno, errdepth, ok):
         if not ok:
             cn = x509.get_subject().commonName
-            logger.info(
-                    'server certificate verify error[errno=%d cn=%s]',
-                    errno,
-                    cn
+            raise RuntimeError(
+                    f'server certificate verify error[errno={errno} cn={cn}]',
             )
         return ok
 
