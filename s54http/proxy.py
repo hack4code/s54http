@@ -7,10 +7,13 @@ import struct
 import logging
 import weakref
 
-from twisted.internet import reactor, protocol
-from twisted.internet.error import CannotListenError
-from twisted.application.internet import ClientService
-from twisted.internet.endpoints import wrapClientTLS, HostnameEndpoint
+from twisted.internet import (
+        reactor,
+        error as TwistedError,
+        protocol as TwistedProtocol,
+        endpoints as TwistedEndpoint,
+)
+from twisted.application import internet as TwistedInetService
 
 from s54http.utils import (
         SSLCtxFactory, NullProxy,
@@ -35,7 +38,7 @@ config = {
 }
 
 
-class TunnelProtocol(protocol.Protocol):
+class TunnelProtocol(TwistedProtocol.Protocol):
 
     def connectionMade(self):
         self.transport.setTcpNoDelay(True)
@@ -43,7 +46,12 @@ class TunnelProtocol(protocol.Protocol):
         self.buffer = b''
         self.dispatcher = self.factory.dispatcher
         self.dispatcher.tunnelConnected(self)
-        logger.info('proxy connected to server')
+        server = self.transport.getPeer()
+        logger.info(
+                'proxy connected to %s:%u',
+                server.host,
+                server.port,
+        )
 
     def dataReceived(self, data):
         self.buffer += data
@@ -57,11 +65,16 @@ class TunnelProtocol(protocol.Protocol):
         self.buffer = self.buffer[length:]
 
     def connectionLost(self, reason):
-        logger.info('connetion to server lost')
         self.dispatcher.tunnelClosed()
+        server = self.transport.getPeer()
+        logger.info(
+                'proxy connetion to %s:%u lost',
+                server.host,
+                server.port
+        )
 
 
-class TunnelFactory(protocol.ClientFactory):
+class TunnelFactory(TwistedProtocol.ClientFactory):
 
     protocol = TunnelProtocol
 
@@ -87,11 +100,10 @@ class SocksDispatcher:
         return True
 
     def connectTunnel(self, addr, port, ssl_ctx):
-        wrapped = HostnameEndpoint(reactor, addr, port)
-        endpoint = wrapClientTLS(ssl_ctx, wrapped)
         factory = TunnelFactory(self)
-        service = ClientService(endpoint, factory)
-        waitForConnection = service.whenConnected(failAfterFailures=3)
+        wrapped = TwistedEndpoint.HostnameEndpoint(reactor, addr, port)
+        endpoint = TwistedEndpoint.wrapClientTLS(ssl_ctx, wrapped)
+        service = TwistedInetService.ClientService(endpoint, factory)
 
         def connected(p):
             pass
@@ -101,9 +113,12 @@ class SocksDispatcher:
                 'connect has failed 3 times, proxy will keep connecting'
             )
 
-        waitForConnection.addCallbacks(connected, failed)
+        service.whenConnected(failAfterFailures=3).addCallbacks(
+                connected,
+                failed
+        )
         self.service = service
-        service.startService()
+        self.service.startService()
 
     def tunnelConnected(self, p):
         self.transport = p.transport
@@ -301,7 +316,7 @@ class SocksDispatcher:
         self.transport.write(message)
 
 
-class Socks5Protocol(protocol.Protocol):
+class Socks5Protocol(TwistedProtocol.Protocol):
 
     def connectionMade(self):
         dispatcher = self.factory.dispatcher
@@ -422,14 +437,14 @@ class Socks5Protocol(protocol.Protocol):
         self.dispatcher.sendRemote(self, data)
 
 
-class Socks5Factory(protocol.ServerFactory):
+class Socks5Factory(TwistedProtocol.ServerFactory):
 
     protocol = Socks5Protocol
 
-    def __init__(self, addr, port, ssl_ctx):
+    def __init__(self, address, port, ssl_ctx):
         self._sock_id = 0
         self.dispatcher = SocksDispatcher(
-                addr,
+                address,
                 port,
                 ssl_ctx
         )
@@ -445,11 +460,7 @@ class Socks5Factory(protocol.ServerFactory):
         return self._sock_id
 
 
-def serve(config):
-    addr, port = config['host'], config['port']
-    remote_addr, remote_port = config['saddr'], config['sport']
-    ca, key, cert = config['ca'], config['key'], config['cert']
-    dhparam = config['dhparam']
+def _create_ssl_context(config):
 
     def verify(conn, x509, errno, errdepth, ok):
         if not ok:
@@ -461,14 +472,20 @@ def serve(config):
             )
         return ok
 
-    ssl_ctx = SSLCtxFactory(
+    return SSLCtxFactory(
             True,
-            ca,
-            key,
-            cert,
-            dhparam=dhparam,
+            config['ca'],
+            config['key'],
+            config['cert'],
+            dhparam=config['dhparam'],
             callback=verify
     )
+
+
+def serve(config):
+    ssl_ctx = _create_ssl_context(config)
+    address, port = config['host'], config['port']
+    remote_addr, remote_port = config['saddr'], config['sport']
     factory = Socks5Factory(
             remote_addr,
             remote_port,
@@ -489,9 +506,9 @@ def serve(config):
         reactor.listenTCP(
                 port,
                 factory,
-                interface=addr
+                interface=address
         )
-    except CannotListenError:
+    except TwistedError.CannotListenError:
         raise RuntimeError(
                 f"couldn't listen on :{port}, address already in use"
         )

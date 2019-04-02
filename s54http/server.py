@@ -5,13 +5,20 @@
 import re
 import gc
 import struct
-import logging
 import weakref
+import logging
 
-from twisted.names import client, dns
-from zope.interface import implementer
-from twisted.internet.error import CannotListenError
-from twisted.internet import reactor, protocol, interfaces
+from zope import interface as ZopeInterface
+from twisted.names import (
+    dns as DNS,
+    client as TwistedDNS,
+)
+from twisted.internet import (
+        reactor,
+        error as TwistedError,
+        protocol as TwistedProtocol,
+        interfaces as TwistedInterface,
+)
 
 from s54http.utils import (
         SSLCtxFactory, Cache, NullProxy,
@@ -36,7 +43,7 @@ config = {
 _IP = re.compile(r'[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}')
 
 
-class RemoteProtocol(protocol.Protocol):
+class RemoteProtocol(TwistedProtocol.Protocol):
 
     def connectionMade(self):
         self.proxy = self.factory.proxy
@@ -52,7 +59,7 @@ class RemoteProtocol(protocol.Protocol):
             self.transport.abortConnection()
 
 
-class RemoteFactory(protocol.ClientFactory):
+class RemoteFactory(TwistedProtocol.ClientFactory):
 
     protocol = RemoteProtocol
 
@@ -78,7 +85,7 @@ class SockProxy:
     __slots__ = (
             'sock_id', 'dispatcher',
             'remote_host', 'remote_port', 'remote_addr',
-            'resolver', 'addr_cache',
+            'resolver', 'address_cache',
             'buffer', 'has_connect', 'transport',
             '__weakref__'
     )
@@ -89,7 +96,7 @@ class SockProxy:
         self.remote_host = host
         self.remote_port = port
         self.resolver = dispatcher.resolver
-        self.addr_cache = dispatcher.addr_cache
+        self.address_cache = dispatcher.address_cache
         self.buffer = b''
         self.has_connect = False
         self.remote_addr = None
@@ -132,10 +139,10 @@ class SockProxy:
     def resolveOk(self, records):
         answers = records[0]
         for answer in answers:
-            if answer.type != dns.A:
+            if answer.type != DNS.A:
                 continue
             addr = answer.payload.dottedQuad().strip()
-            self.addr_cache[self.remote_host] = addr
+            self.address_cache[self.remote_host] = addr
             self.remote_addr = addr
             self.connectRemote()
             break
@@ -156,7 +163,7 @@ class SockProxy:
             self.remote_addr = host
         else:
             try:
-                self.remote_addr = self.addr_cache[host]
+                self.remote_addr = self.address_cache[host]
             except KeyError:
                 # getHostByName can't be used here, it may return ipv6 address
                 self.resolver.lookupAddress(
@@ -218,7 +225,7 @@ class SocksDispatcher:
         self.socks = {}
         self.transport = p.transport
         self.resolver = p.factory.resolver
-        self.addr_cache = p.factory.addr_cache
+        self.address_cache = p.factory.address_cache
 
     def dispatchMessage(self, message):
         type, = struct.unpack('!B', message[4:5])
@@ -383,7 +390,7 @@ class SocksDispatcher:
         gc.collect()
 
 
-@implementer(interfaces.IPushProducer)
+@ZopeInterface.implementer(TwistedInterface.IPushProducer)
 class Producer:
 
     def __init__(self, dispatcher):
@@ -403,7 +410,7 @@ class Producer:
         pass
 
 
-class TunnelProtocol(protocol.Protocol):
+class TunnelProtocol(TwistedProtocol.Protocol):
 
     def connectionMade(self):
         dispatcher = SocksDispatcher(self)
@@ -415,7 +422,7 @@ class TunnelProtocol(protocol.Protocol):
         self.transport.registerProducer(producer, True)
         proxy = self.transport.getPeer()
         logger.info(
-                'proxy[%s:%u] connected to server',
+                'proxy[%s:%u] connected',
                 proxy.host,
                 proxy.port
         )
@@ -423,7 +430,7 @@ class TunnelProtocol(protocol.Protocol):
     def connectionLost(self, reason=None):
         proxy = self.transport.getPeer()
         logger.info(
-                'proxy[%s:%u] lost connection',
+                'proxy[%s:%u] lost',
                 proxy.host,
                 proxy.port
         )
@@ -442,7 +449,7 @@ class TunnelProtocol(protocol.Protocol):
         self.buffer = self.buffer[length:]
 
 
-def create_resolver(config):
+def _create_resolver(config):
     dns = config['dns']
     if dns is None:
         servers = None
@@ -451,21 +458,22 @@ def create_resolver(config):
         if not dns:
             servers = None
         elif ':' in dns:
-            addr, port = dns.split(':')
-            servers = [(addr, int(port))]
+            address, port = dns.split(':')
+            servers = [(address, int(port))]
         else:
             servers = [(dns, 53)]
-    return client.createResolver(servers=servers)
+    return TwistedDNS.createResolver(servers=servers)
 
 
-def serve(config):
-    addr, port = config['host'], config['port']
-    ca, key, cert = config['ca'], config['key'], config['cert']
-    dhparam = config['dhparam']
-    factory = protocol.ServerFactory()
+def _create_tunnel_factory(config):
+    factory = TwistedProtocol.ServerFactory()
     factory.protocol = TunnelProtocol
-    factory.resolver = create_resolver(config)
-    factory.addr_cache = Cache()
+    factory.address_cache = Cache()
+    factory.resolver = _create_resolver(config)
+    return factory
+
+
+def _create_ssl_context(config):
 
     def verify(conn, x509, errno, errdepth, ok):
         if not ok:
@@ -477,26 +485,32 @@ def serve(config):
             )
         return ok
 
-    ssl_ctx = SSLCtxFactory(
+    return SSLCtxFactory(
             False,
-            ca,
-            key,
-            cert,
-            dhparam=dhparam,
+            config['ca'],
+            config['key'],
+            config['cert'],
+            dhparam=config['dhparam'],
             callback=verify
     )
+
+
+def serve(config):
+    ssl_ctx = _create_ssl_context(config)
+    tunnel_factory = _create_tunnel_factory(config)
+    address, port = config['host'], config['port']
     try:
         reactor.listenSSL(
                 port,
-                factory,
+                tunnel_factory,
                 ssl_ctx,
-                interface=addr,
+                interface=address,
         )
-    except CannotListenError:
+    except TwistedError.CannotListenError:
         raise RuntimeError(
                 f"couldn't listen on :{port}, address already in use"
         )
-    logger.info('server start running...')
+    logger.info('server running ...')
     reactor.run()
 
 

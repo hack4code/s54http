@@ -5,11 +5,11 @@ import os
 import sys
 import atexit
 import logging
-from pathlib import Path
-from argparse import ArgumentParser
-from collections import OrderedDict
+import pathlib
+import argparse
+import collections
 
-from OpenSSL import SSL as ssl
+from OpenSSL import SSL
 
 
 __all__ = [
@@ -28,7 +28,11 @@ class NullProxy:
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
-            cls._instance = super().__new__(cls, *args, **kwargs)
+            cls._instance = super().__new__(
+                    cls,
+                    *args,
+                    **kwargs
+            )
         return cls._instance
 
     def __getattr__(self, name):
@@ -40,7 +44,7 @@ class NullProxy:
 
 class SSLCtxFactory:
 
-    method = ssl.TLSv1_2_METHOD
+    method = SSL.TLSv1_2_METHOD
 
     def __init__(self, client, ca, key, cert, *, dhparam=None, callback=None):
         self.isClient = client
@@ -50,8 +54,10 @@ class SSLCtxFactory:
         self._dhparam = dhparam
         self._ctx = None
         if callback is None:
+
             def verify(conn, x509, errno, errdepth, ok):
                 return ok
+
             callback = verify
         self._callback = callback
         self.cacheContext()
@@ -59,11 +65,11 @@ class SSLCtxFactory:
     def cacheContext(self):
         if self._ctx is not None:
             return
-        ctx = ssl.Context(ssl.TLSv1_2_METHOD)
-        ctx.set_options(ssl.OP_NO_SSLv2)
-        ctx.set_options(ssl.OP_NO_SSLv3)
-        ctx.set_options(ssl.OP_NO_TLSv1)
-        ctx.set_options(ssl.OP_NO_TLSv1_1)
+        ctx = SSL.Context(SSL.TLSv1_2_METHOD)
+        ctx.set_options(SSL.OP_NO_SSLv2)
+        ctx.set_options(SSL.OP_NO_SSLv3)
+        ctx.set_options(SSL.OP_NO_TLSv1)
+        ctx.set_options(SSL.OP_NO_TLSv1_1)
         ctx.use_certificate_file(self._cert)
         ctx.use_privatekey_file(self._key)
         ctx.check_privatekey()
@@ -72,17 +78,17 @@ class SSLCtxFactory:
             ctx.load_tmp_dh(self._dhparam)
         ctx.set_cipher_list('ECDHE-RSA-AES128-GCM-SHA256')
         ctx.set_verify(
-                ssl.VERIFY_PEER |
-                ssl.VERIFY_FAIL_IF_NO_PEER_CERT |
-                ssl.VERIFY_CLIENT_ONCE,
+                SSL.VERIFY_PEER |
+                SSL.VERIFY_FAIL_IF_NO_PEER_CERT |
+                SSL.VERIFY_CLIENT_ONCE,
                 self._callback
         )
         self._ctx = ctx
 
     def __getstate__(self):
-        d = self.__dict__.copy()
-        del d['_ctx']
-        return d
+        state = self.__dict__.copy()
+        del state['_ctx']
+        return state
 
     def __setstate__(self, state):
         self.__dict__ = state
@@ -91,7 +97,7 @@ class SSLCtxFactory:
         return self._ctx
 
 
-class Cache(OrderedDict):
+class Cache(collections.OrderedDict):
 
     def __init__(self, limit=1024):
         super().__init__()
@@ -155,8 +161,21 @@ def init_logger(config, logger):
 
 
 def parse_args(config):
+    PATH_ARGUMENT = [
+            'ca',
+            'key',
+            'cert',
+            'dhparam',
+            'pidfile',
+            'logfile'
+    ]
+    FILE_ARGUMENT = [
+            'ca',
+            'arg',
+            'cert'
+    ]
     usage = f"{sys.argv[0].split('/')[-1]}"
-    parser = ArgumentParser(usage)
+    parser = argparse.ArgumentParser(usage)
     parser.add_argument(
             "-d",
             "--daemon",
@@ -229,17 +248,18 @@ def parse_args(config):
             help="dns server[addr:port|addr]"
     )
     args = parser.parse_args()
-    for key in config.keys():
-        value = getattr(args, key, None)
+    for arg in config.keys():
+        value = getattr(args, arg, None)
         if not value:
             continue
-        config[key] = value
-    PATH_KEYS = ['ca', 'key', 'cert', 'dhparam', 'pidfile', 'logfile']
-    for key in PATH_KEYS:
-        value = config[key]
-        fp = Path(value)
-        config[key] = str(fp.absolute())
-        if key == 'dhparam' and not fp.exists():
-            config[key] = None
-        if key in ('ca', 'key', 'cert') and not fp.exists():
-            raise RuntimeError(f'{key} file not existed')
+        config[arg] = value
+    for arg in PATH_ARGUMENT:
+        value = config[arg]
+        fp = pathlib.Path(value)
+        config[arg] = str(fp.absolute())
+        if fp.exists():
+            continue
+        if arg == 'dhparam':
+            config[arg] = None
+        elif arg in FILE_ARGUMENT:
+            raise RuntimeError(f'{arg} file not existed')
