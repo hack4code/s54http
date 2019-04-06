@@ -2,27 +2,21 @@
 # -*- coding: utf-8 -*-
 
 
-import re
 import gc
+import logging
+import re
 import struct
 import weakref
-import logging
 
-from zope import interface as ZopeInterface
-from twisted.names import (
-    dns as DNS,
-    client as TwistedDNS,
-)
+from twisted.names import client as TwistedDNS, dns as DNS
 from twisted.internet import (
-        reactor,
-        error as TwistedError,
-        protocol as TwistedProtocol,
-        interfaces as TwistedInterface,
+        error as TwistedError, interfaces as TwistedInterface,
+        protocol as TwistedProtocol, reactor,
 )
+from zope import interface as ZopeInterface
 
 from s54http.utils import (
-        SSLCtxFactory, Cache, NullProxy,
-        daemonize, parse_args, init_logger,
+        Cache, daemonize, init_logger, NullProxy, parse_args, SSLCtxFactory,
 )
 
 

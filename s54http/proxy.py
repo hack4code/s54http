@@ -3,21 +3,18 @@
 
 
 import gc
-import struct
 import logging
+import struct
 import weakref
 
-from twisted.internet import (
-        reactor,
-        error as TwistedError,
-        protocol as TwistedProtocol,
-        endpoints as TwistedEndpoint,
-)
 from twisted.application import internet as TwistedInetService
+from twisted.internet import (
+        endpoints as TwistedEndpoint, error as TwistedError,
+        protocol as TwistedProtocol, reactor,
+)
 
 from s54http.utils import (
-        SSLCtxFactory, NullProxy,
-        daemonize, parse_args, init_logger
+        daemonize, init_logger, NullProxy, parse_args, SSLCtxFactory,
 )
 
 
