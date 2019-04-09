@@ -81,7 +81,7 @@ class TunnelFactory(TwistedProtocol.ClientFactory):
 
 class SocksDispatcher:
 
-    __slots__ = ('socks', 'transport', 'service')
+    __slots__ = ('socks', 'transport', 'service', '__weakref__')
 
     def __init__(self, addr, port, ssl_ctx):
         self.socks = {}
