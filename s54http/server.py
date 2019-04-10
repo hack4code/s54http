@@ -160,15 +160,12 @@ class SockProxy:
                 self.remote_addr = self.address_cache[host]
             except KeyError:
                 # getHostByName can't be used here, it may return ipv6 address
-                try:
-                    self.resolver.lookupAddress(
-                            host
-                    ).addCallbacks(
-                            self.resolveOk,
-                            self.resolveErr
-                    )
-                except Exception as e:
-                    self.connectErr(f'name[{host}] resove error {e}')
+                self.resolver.lookupAddress(
+                        host
+                ).addCallbacks(
+                        self.resolveOk,
+                        self.resolveErr
+                )
                 return
         self.connectRemote()
 
@@ -255,12 +252,20 @@ class SocksDispatcher:
                 host,
                 port
         )
-        self.socks[sock_id] = SockProxy(
-                sock_id,
-                self,
-                host,
-                port,
-        )
+        try:
+            self.socks[sock_id] = SockProxy(
+                    sock_id,
+                    self,
+                    host,
+                    port,
+            )
+        except Exception as e:
+            logger.error(
+                    'sock_id[%u] SockProxy exception[%s]',
+                    sock_id,
+                    e
+            )
+        self.handleConnect(sock_id, 1)
 
     def handleConnect(self, sock_id, code):
         """
