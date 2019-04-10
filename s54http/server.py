@@ -265,7 +265,7 @@ class SocksDispatcher:
                     sock_id,
                     e
             )
-        self.handleConnect(sock_id, 1)
+            self.handleConnect(sock_id, 1)
 
     def handleConnect(self, sock_id, code):
         """
