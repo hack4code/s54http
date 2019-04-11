@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 
 
-import os
-import sys
-import atexit
-import logging
-import pathlib
 import argparse
+import atexit
 import collections
+import logging
+import os
+import pathlib
+import sys
 
 from OpenSSL import SSL
 
