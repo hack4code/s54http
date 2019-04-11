@@ -215,6 +215,8 @@ class SockProxy:
 
 class SocksDispatcher:
 
+    __slots__ = ('socks', 'transport', 'resolver', 'address_cache')
+
     def __init__(self, p):
         self.socks = {}
         self.transport = p.transport
