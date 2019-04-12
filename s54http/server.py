@@ -513,12 +513,11 @@ def _create_ssl_context(config):
     from cryptography import x509 as X509
     from cryptography.hazmat.backends import default_backend
 
-    fp = open(config['ca'], mode='rb')
-    ca = X509.load_pem_x509_certificate(
-            fp.read(),
-            default_backend()
-    )
-    serial_number_ca = ca.serial_number
+    with open(config['ca'], mode='rb') as fp:
+        serial_number_ca = X509.load_pem_x509_certificate(
+                fp.read(),
+                default_backend()
+        ).serial_number
 
     def verify(conn, x509, errno, errdepth, ok):
         if not ok:
