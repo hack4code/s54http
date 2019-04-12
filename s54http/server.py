@@ -409,6 +409,8 @@ class SocksDispatcher:
 @ZopeInterface.implementer(TwistedInterface.IPushProducer)
 class Producer:
 
+    __slots__ = ('dispatcher')
+
     def __init__(self, dispatcher):
         self.dispatcher = dispatcher
 
@@ -428,7 +430,14 @@ class Producer:
 
 class TunnelProtocol(TwistedProtocol.Protocol):
 
-    def connectionMade(self):
+    @property
+    def isVerified(self):
+        if hasattr(self, 'dispatcher'):
+            return True
+        else:
+            return False
+
+    def connectionVerified(self):
         dispatcher = SocksDispatcher(self)
         producer = Producer(dispatcher)
         self.buffer = b''
@@ -443,15 +452,27 @@ class TunnelProtocol(TwistedProtocol.Protocol):
                 proxy.port
         )
 
+    def connectionMade(self):
+        connection = self.transport.getHandle()
+        connection.protocol = self
+
     def connectionLost(self, reason=None):
         proxy = self.transport.getPeer()
-        logger.info(
-                'proxy[%s:%u] lost',
-                proxy.host,
-                proxy.port
-        )
-        self.transport.unregisterProducer()
-        self.dispatcher.tunnelClosed()
+        if self.isVerified:
+            self.transport.unregisterProducer()
+            self.dispatcher.tunnelClosed()
+            logger.info(
+                    'proxy[%s:%u] lost',
+                    proxy.host,
+                    proxy.port
+            )
+        else:
+            logger.error(
+                    'proxy[%s:%u] closed[%s]',
+                    proxy.host,
+                    proxy.port,
+                    reason
+            )
 
     def dataReceived(self, data):
         self.buffer += data
@@ -490,6 +511,15 @@ def _create_tunnel_factory(config):
 
 
 def _create_ssl_context(config):
+    from cryptography import x509 as X509
+    from cryptography.hazmat.backends import default_backend
+
+    fp = open(config['ca'], mode='rb')
+    ca = X509.load_pem_x509_certificate(
+            fp.read(),
+            default_backend()
+    )
+    serial_number_ca = ca.serial_number
 
     def verify(conn, x509, errno, errdepth, ok):
         if not ok:
@@ -499,6 +529,8 @@ def _create_ssl_context(config):
                     errno,
                     cn
             )
+        elif x509.get_serial_number() == serial_number_ca:
+            conn.protocol.connectionVerified()
         return ok
 
     return SSLCtxFactory(
