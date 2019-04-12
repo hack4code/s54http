@@ -3,6 +3,7 @@
 
 
 NAME="s5p"
+DOCKER_OPTS="--restart=always --net=host --log-opt mode=non-blocking --log-opt max-buffer-size=4m"
 
 
 if (( $# < 1 )); then
@@ -39,9 +40,9 @@ docker build -t $NAME .
 
 echo "build $ROLE container ..."
 if [[ "$ROLE" == "server" ]]; then
-  docker create --restart=always --name $NAME --net=host $NAME s5pserver
+  docker create --name $NAME "${DOCKER_OPTS}" $NAME s5pserver
 elif [[ "$ROLE" == "proxy" ]]; then
-  docker create --restart=always --name $NAME --net=host $NAME s5pproxy -S $SERVER
+  docker create --name $NAME "${DOCKER_OPTS}" $NAME s5pproxy -S $SERVER
 else
   echo "only support server|proxy container"
   exit 1
