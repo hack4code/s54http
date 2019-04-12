@@ -106,6 +106,15 @@ class SockProxy:
             return False
         return True
 
+    @property
+    def isClosed(self):
+        if (isinstance(self.dispatcher, NullProxy) and
+                isinstance(self.transport, NullProxy) and
+                self.remote_host is None and self.remote_port is None):
+            return True
+        else:
+            return False
+
     def close(self, *, abort=True):
         self.dispatcher = NullProxy()
         self.buffer = b''
@@ -121,7 +130,6 @@ class SockProxy:
         self.transport = NullProxy()
 
     def connectRemote(self):
-        assert self.remote_addr is not None
         factory = RemoteFactory(weakref.proxy(self))
         reactor.connectTCP(
                 self.remote_addr,
@@ -131,6 +139,8 @@ class SockProxy:
         self.has_connect = True
 
     def resolveOk(self, records):
+        if self.isClosed:
+            return
         answers = records[0]
         for answer in answers:
             if answer.type != DNS.A:
@@ -144,6 +154,8 @@ class SockProxy:
             self.resolveErr('no ipv4 address found')
 
     def resolveErr(self, reason=''):
+        if self.isClosed:
+            return
         logger.error(
                 'sock_id[%u] resolve host[%s] failed[%s]',
                 self.sock_id,
