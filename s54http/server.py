@@ -468,10 +468,9 @@ class TunnelProtocol(TwistedProtocol.Protocol):
             )
         else:
             logger.error(
-                    'proxy[%s:%u] closed[%s]',
+                    'proxy[%s:%u] closed[ssl error]',
                     proxy.host,
                     proxy.port,
-                    reason
             )
 
     def dataReceived(self, data):
