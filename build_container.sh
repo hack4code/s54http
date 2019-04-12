@@ -40,9 +40,9 @@ docker build -t $NAME .
 
 echo "build $ROLE container ..."
 if [[ "$ROLE" == "server" ]]; then
-  docker create --name $NAME "${DOCKER_OPTS}" $NAME s5pserver
+  docker create --name $NAME $DOCKER_OPTS $NAME s5pserver
 elif [[ "$ROLE" == "proxy" ]]; then
-  docker create --name $NAME "${DOCKER_OPTS}" $NAME s5pproxy -S $SERVER
+  docker create --name $NAME $DOCKER_OPTS $NAME s5pproxy -S $SERVER
 else
   echo "only support server|proxy container"
   exit 1
