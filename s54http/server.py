@@ -454,7 +454,7 @@ class TunnelProtocol(TwistedProtocol.Protocol):
 
     def connectionMade(self):
         connection = self.transport.getHandle()
-        connection.protocol = self
+        connection.protocol = weakref.proxy(self)
 
     def connectionLost(self, reason=None):
         proxy = self.transport.getPeer()
