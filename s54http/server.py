@@ -182,9 +182,10 @@ class SockProxy:
         self.connectRemote()
 
     def connectOk(self, transport):
-        transport.write(self.buffer)
-        self.buffer = b''
         self.transport = transport
+        if self.buffer:
+            self.transport.write(self.buffer)
+            self.buffer = b''
 
     def connectErr(self, message):
         logger.error(
