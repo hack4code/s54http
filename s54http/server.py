@@ -8,31 +8,41 @@ import re
 import struct
 import weakref
 
-from twisted.names import client as TwistedDNS, dns as DNS
+from twisted.names import (
+    client as TwistedDNS,
+    dns as DNS,
+)
 from twisted.internet import (
-        error as TwistedError, interfaces as TwistedInterface,
-        protocol as TwistedProtocol, reactor,
+    error as TwistedError,
+    interfaces as TwistedInterface,
+    protocol as TwistedProtocol,
+    reactor,
 )
 from zope import interface as ZopeInterface
 
 from s54http.utils import (
-        Cache, daemonize, init_logger, NullProxy, parse_args, SSLCtxFactory,
+    Cache,
+    daemonize,
+    init_logger,
+    NullProxy,
+    parse_args,
+    SSLCtxFactory,
 )
 
 
 logger = logging.getLogger(__name__)
 config = {
-        'daemon': False,
-        'host': '0.0.0.0',
-        'port': 8080,
-        'ca': 'keys/ca.crt',
-        'key': 'keys/server.key',
-        'cert': 'keys/server.crt',
-        'dhparam': 'keys/dhparam.pem',
-        'pidfile': 's5p.pid',
-        'logfile': 'server.log',
-        'loglevel': 'INFO',
-        'dns': None,
+    'daemon': False,
+    'host': '0.0.0.0',
+    'port': 8080,
+    'ca': 'keys/ca.crt',
+    'key': 'keys/server.key',
+    'cert': 'keys/server.crt',
+    'dhparam': 'keys/dhparam.pem',
+    'pidfile': 's5p.pid',
+    'logfile': 'server.log',
+    'loglevel': 'INFO',
+    'dns': None,
 }
 _IP = re.compile(r'[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}')
 
@@ -76,13 +86,19 @@ class RemoteFactory(TwistedProtocol.ClientFactory):
 
 class SockProxy:
 
-    __slots__ = (
-            'sock_id', 'dispatcher',
-            'remote_host', 'remote_port', 'remote_addr',
-            'resolver', 'address_cache',
-            'buffer', 'has_connect', 'transport',
-            '__weakref__'
-    )
+    __slots__ = [
+        'sock_id',
+        'dispatcher',
+        'remote_host',
+        'remote_port',
+        'remote_addr',
+        'resolver',
+        'address_cache',
+        'buffer',
+        'has_connect',
+        'transport',
+        '__weakref__',
+    ]
 
     def __init__(self, sock_id, dispatcher, host, port):
         self.sock_id = sock_id
@@ -132,9 +148,9 @@ class SockProxy:
     def connectRemote(self):
         factory = RemoteFactory(weakref.proxy(self))
         reactor.connectTCP(
-                self.remote_addr,
-                self.remote_port,
-                factory
+            self.remote_addr,
+            self.remote_port,
+            factory
         )
         self.has_connect = True
 
@@ -157,10 +173,10 @@ class SockProxy:
         if self.isClosed:
             return
         logger.error(
-                'sock_id[%u] resolve host[%s] failed[%s]',
-                self.sock_id,
-                self.remote_host,
-                reason
+            'sock_id[%u] resolve host[%s] failed[%s]',
+            self.sock_id,
+            self.remote_host,
+            reason
         )
         self.dispatcher.handleConnect(self.sock_id, 1)
 
@@ -173,10 +189,10 @@ class SockProxy:
             except KeyError:
                 # getHostByName can't be used here, it may return ipv6 address
                 self.resolver.lookupAddress(
-                        host
+                    host
                 ).addCallbacks(
-                        self.resolveOk,
-                        self.resolveErr
+                    self.resolveOk,
+                    self.resolveErr
                 )
                 return
         self.connectRemote()
@@ -189,11 +205,11 @@ class SockProxy:
 
     def connectErr(self, message):
         logger.error(
-                'sock_id[%u] connect %s:%u failed[%s]',
-                self.sock_id,
-                self.remote_host,
-                self.remote_port,
-                message
+            'sock_id[%u] connect %s:%u failed[%s]',
+            self.sock_id,
+            self.remote_host,
+            self.remote_port,
+            message
         )
         self.dispatcher.handleConnect(self.sock_id, 1)
 
@@ -208,10 +224,10 @@ class SockProxy:
 
     def connectionClosed(self):
         logger.info(
-                'sock_id[%u] connection[%s:%u] closed',
-                self.sock_id,
-                self.remote_host,
-                self.remote_port
+            'sock_id[%u] connection[%s:%u] closed',
+            self.sock_id,
+            self.remote_host,
+            self.remote_port
         )
         self.dispatcher.handleClose(self.sock_id)
 
@@ -228,7 +244,12 @@ class SockProxy:
 
 class SocksDispatcher:
 
-    __slots__ = ('socks', 'transport', 'resolver', 'address_cache')
+    __slots__ = [
+        'socks',
+        'transport',
+        'resolver',
+        'address_cache',
+    ]
 
     def __init__(self, p):
         self.socks = {}
@@ -262,23 +283,23 @@ class SocksDispatcher:
         host = message[9:-2].tobytes().decode('utf-8').strip()
         port, = struct.unpack('!H', message[-2:])
         logger.info(
-                'sock_id[%u] connect %s:%u',
-                sock_id,
-                host,
-                port
+            'sock_id[%u] connect %s:%u',
+            sock_id,
+            host,
+            port
         )
         try:
             self.socks[sock_id] = SockProxy(
-                    sock_id,
-                    self,
-                    host,
-                    port,
+                sock_id,
+                self,
+                host,
+                port,
             )
         except Exception as e:
             logger.error(
-                    'sock_id[%u] SockProxy exception[%s]',
-                    sock_id,
-                    e
+                'sock_id[%u] SockProxy exception[%s]',
+                sock_id,
+                e
             )
             self.handleConnect(sock_id, 1)
 
@@ -295,11 +316,11 @@ class SocksDispatcher:
             return
         self.closeSock(sock_id, abort=True)
         message = struct.pack(
-                '!IBIB',
-                10,
-                2,
-                sock_id,
-                code
+            '!IBIB',
+            10,
+            2,
+            sock_id,
+            code
         )
         self.transport.write(message)
 
@@ -332,10 +353,10 @@ class SocksDispatcher:
         """
         total_length = 9 + len(data)
         header = struct.pack(
-                '!IBI',
-                total_length,
-                4,
-                sock_id,
+            '!IBI',
+            total_length,
+            4,
+            sock_id,
         )
         self.transport.writeSequence([header, data])
 
@@ -375,10 +396,10 @@ class SocksDispatcher:
         logger.info('sock_id[%u] local closed', sock_id)
         self.closeSock(sock_id)
         message = struct.pack(
-                '!IBI',
-                9,
-                6,
-                sock_id
+            '!IBI',
+            9,
+            6,
+            sock_id
         )
         self.transport.write(message)
 
@@ -393,9 +414,9 @@ class SocksDispatcher:
         """
         proxy = self.transport.getPeer()
         logger.info(
-                'proxy[%s:%u] closed tunnel',
-                proxy.host,
-                proxy.port
+            'proxy[%s:%u] closed tunnel',
+            proxy.host,
+            proxy.port
         )
         self.transport.loseConnection()
 
@@ -410,7 +431,7 @@ class SocksDispatcher:
 @ZopeInterface.implementer(TwistedInterface.IPushProducer)
 class Producer:
 
-    __slots__ = ('dispatcher')
+    __slots__ = ['dispatcher']
 
     def __init__(self, dispatcher):
         self.dispatcher = dispatcher
@@ -463,15 +484,15 @@ class TunnelProtocol(TwistedProtocol.Protocol):
             self.transport.unregisterProducer()
             self.dispatcher.tunnelClosed()
             logger.info(
-                    'proxy[%s:%u] lost',
-                    proxy.host,
-                    proxy.port
+                'proxy[%s:%u] lost',
+                proxy.host,
+                proxy.port
             )
         else:
             logger.error(
-                    'proxy[%s:%u] closed[ssl error]',
-                    proxy.host,
-                    proxy.port,
+                'proxy[%s:%u] closed[ssl error]',
+                proxy.host,
+                proxy.port,
             )
 
     def dataReceived(self, data):
@@ -516,29 +537,29 @@ def _create_ssl_context(config):
 
     with open(config['ca'], mode='rb') as fp:
         serial_number_ca = X509.load_pem_x509_certificate(
-                fp.read(),
-                default_backend()
+            fp.read(),
+            default_backend()
         ).serial_number
 
     def verify(conn, x509, errno, errdepth, ok):
         if not ok:
             cn = x509.get_subject().commonName
             logger.error(
-                    'proxy certificate verify error[errno=%d cn=%s]',
-                    errno,
-                    cn
+                'proxy certificate verify error[errno=%d cn=%s]',
+                errno,
+                cn
             )
         elif x509.get_serial_number() == serial_number_ca:
             conn.protocol.connectionVerified()
         return ok
 
     return SSLCtxFactory(
-            False,
-            config['ca'],
-            config['key'],
-            config['cert'],
-            dhparam=config['dhparam'],
-            callback=verify
+        False,
+        config['ca'],
+        config['key'],
+        config['cert'],
+        dhparam=config['dhparam'],
+        callback=verify
     )
 
 
@@ -548,14 +569,14 @@ def serve(config):
     address, port = config['host'], config['port']
     try:
         reactor.listenSSL(
-                port,
-                tunnel_factory,
-                ssl_ctx,
-                interface=address,
+            port,
+            tunnel_factory,
+            ssl_ctx,
+            interface=address,
         )
     except TwistedError.CannotListenError:
         raise RuntimeError(
-                f"couldn't listen on :{port}, address already in use"
+            f"couldn't listen on :{port}, address already in use"
         )
     logger.info('server running ...')
     reactor.run()

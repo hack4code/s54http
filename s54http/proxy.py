@@ -9,29 +9,35 @@ import weakref
 
 from twisted.application import internet as TwistedInetService
 from twisted.internet import (
-        endpoints as TwistedEndpoint, error as TwistedError,
-        protocol as TwistedProtocol, reactor,
+    endpoints as TwistedEndpoint,
+    error as TwistedError,
+    protocol as TwistedProtocol,
+    reactor,
 )
 
 from s54http.utils import (
-        daemonize, init_logger, NullProxy, parse_args, SSLCtxFactory,
+    daemonize,
+    init_logger,
+    NullProxy,
+    parse_args,
+    SSLCtxFactory,
 )
 
 
 logger = logging.getLogger(__name__)
 config = {
-        'daemon': False,
-        'saddr': '',
-        'sport': 8080,
-        'host': '127.0.0.1',
-        'port': 8080,
-        'ca': 'keys/ca.crt',
-        'key': 'keys/client.key',
-        'cert': 'keys/client.crt',
-        'dhparam': 'keys/dhparam.pem',
-        'pidfile': 's5p.pid',
-        'logfile': 'proxy.log',
-        'loglevel': 'INFO'
+    'daemon': False,
+    'saddr': '',
+    'sport': 8080,
+    'host': '127.0.0.1',
+    'port': 8080,
+    'ca': 'keys/ca.crt',
+    'key': 'keys/client.key',
+    'cert': 'keys/client.crt',
+    'dhparam': 'keys/dhparam.pem',
+    'pidfile': 's5p.pid',
+    'logfile': 'proxy.log',
+    'loglevel': 'INFO'
 }
 
 
@@ -45,9 +51,9 @@ class TunnelProtocol(TwistedProtocol.Protocol):
         self.dispatcher.tunnelConnected(self)
         server = self.transport.getPeer()
         logger.info(
-                'proxy connected to %s:%u',
-                server.host,
-                server.port,
+            'proxy connected to %s:%u',
+            server.host,
+            server.port,
         )
 
     def dataReceived(self, data):
@@ -65,9 +71,9 @@ class TunnelProtocol(TwistedProtocol.Protocol):
         self.dispatcher.tunnelClosed()
         server = self.transport.getPeer()
         logger.info(
-                'proxy connetion to %s:%u lost',
-                server.host,
-                server.port
+            'proxy connetion to %s:%u lost',
+            server.host,
+            server.port
         )
 
 
@@ -81,7 +87,12 @@ class TunnelFactory(TwistedProtocol.ClientFactory):
 
 class SocksDispatcher:
 
-    __slots__ = ('socks', 'transport', 'service', '__weakref__')
+    __slots__ = [
+        'socks',
+        'transport',
+        'service',
+        '__weakref__',
+    ]
 
     def __init__(self, addr, port, ssl_ctx):
         self.socks = {}
@@ -113,8 +124,8 @@ class SocksDispatcher:
             )
 
         service.whenConnected(failAfterFailures=3).addCallbacks(
-                connected,
-                failed
+            connected,
+            failed
         )
         self.service = service
         self.service.startService()
@@ -182,18 +193,18 @@ class SocksDispatcher:
         host_length = len(host)
         total_length = 11 + host_length
         logger.info(
-                'sock_id[%u] connect %s:%u',
-                sock_id,
-                host.decode('utf-8'),
-                port,
+            'sock_id[%u] connect %s:%u',
+            sock_id,
+            host.decode('utf-8'),
+            port,
         )
         message = struct.pack(
-                f'!IBI{host_length}sH',
-                total_length,
-                1,
-                sock_id,
-                host,
-                port
+            f'!IBI{host_length}sH',
+            total_length,
+            1,
+            sock_id,
+            host,
+            port
         )
         self.transport.write(message)
 
@@ -223,18 +234,18 @@ class SocksDispatcher:
         """
         sock_id = sock.sock_id
         logger.debug(
-                'sock_id[%u] send data length=%u to %s:%u',
-                sock_id,
-                len(data),
-                sock.remote_host,
-                sock.remote_port
+            'sock_id[%u] send data length=%u to %s:%u',
+            sock_id,
+            len(data),
+            sock.remote_host,
+            sock.remote_port
         )
         total_length = 9 + len(data)
         header = struct.pack(
-                f'!IBI',
-                total_length,
-                3,
-                sock_id,
+            f'!IBI',
+            total_length,
+            3,
+            sock_id,
         )
         self.transport.writeSequence([header, data])
 
@@ -255,11 +266,11 @@ class SocksDispatcher:
             logger.error('sock_id[%u] receive data after closed', sock_id)
         else:
             logger.debug(
-                    'sock_id[%u] receive data length=%u from %s:%u',
-                    sock_id,
-                    len(data),
-                    sock.remote_host,
-                    sock.remote_port
+                'sock_id[%u] receive data length=%u from %s:%u',
+                sock_id,
+                len(data),
+                sock.remote_host,
+                sock.remote_port
             )
             sock.transport.write(data)
 
@@ -278,10 +289,10 @@ class SocksDispatcher:
         logger.info('sock_id[%u] local closed', sock_id)
         self.closeSock(sock_id)
         message = struct.pack(
-                '!IBI',
-                9,
-                5,
-                sock_id
+            '!IBI',
+            9,
+            5,
+            sock_id
         )
         self.transport.write(message)
 
@@ -308,9 +319,9 @@ class SocksDispatcher:
         +-----+------+
         """
         message = struct.pack(
-                '!IB',
-                5,
-                7
+            '!IB',
+            5,
+            7
         )
         self.transport.write(message)
 
@@ -370,8 +381,8 @@ class Socks5Protocol(TwistedProtocol.Protocol):
         if len(self.buffer) < 4:
             return
         version, command, reserved, atyp = struct.unpack(
-                '!BBBB',
-                self.buffer[:4]
+            '!BBBB',
+            self.buffer[:4]
         )
         if version != 5:
             logger.error('unsupported version %u', version)
@@ -411,16 +422,16 @@ class Socks5Protocol(TwistedProtocol.Protocol):
 
     def sendConnectReply(self, rep):
         response = struct.pack(
-                '!BBBBBBBBH',
-                5,
-                rep,
-                0,
-                1,
-                0,
-                0,
-                0,
-                0,
-                0
+            '!BBBBBBBBH',
+            5,
+            rep,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0
         )
         self.transport.write(response)
 
@@ -443,9 +454,9 @@ class Socks5Factory(TwistedProtocol.ServerFactory):
     def __init__(self, address, port, ssl_ctx):
         self._sock_id = 0
         self.dispatcher = SocksDispatcher(
-                address,
-                port,
-                ssl_ctx
+            address,
+            port,
+            ssl_ctx
         )
 
     def shutdown(self):
@@ -465,17 +476,17 @@ def _create_ssl_context(config):
         if not ok:
             cn = x509.get_subject().commonName
             raise RuntimeError(
-                    f'server certificate verify error[errno={errno} cn={cn}]',
+                f'server certificate verify error[errno={errno} cn={cn}]',
             )
         return ok
 
     return SSLCtxFactory(
-            True,
-            config['ca'],
-            config['key'],
-            config['cert'],
-            dhparam=config['dhparam'],
-            callback=verify
+        True,
+        config['ca'],
+        config['key'],
+        config['cert'],
+        dhparam=config['dhparam'],
+        callback=verify
     )
 
 
@@ -484,9 +495,9 @@ def serve(config):
     address, port = config['host'], config['port']
     remote_addr, remote_port = config['saddr'], config['sport']
     factory = Socks5Factory(
-            remote_addr,
-            remote_port,
-            ssl_ctx
+        remote_addr,
+        remote_port,
+        ssl_ctx
     )
 
     def shutdown():
@@ -494,20 +505,20 @@ def serve(config):
         factory.shutdown()
 
     reactor.addSystemEventTrigger(
-            'before',
-            'shutdown',
-            shutdown
+        'before',
+        'shutdown',
+        shutdown
     )
 
     try:
         reactor.listenTCP(
-                port,
-                factory,
-                interface=address
+            port,
+            factory,
+            interface=address
         )
     except TwistedError.CannotListenError:
         raise RuntimeError(
-                f"couldn't listen on :{port}, address already in use"
+            f"couldn't listen on :{port}, address already in use"
         )
     reactor.run()
 
@@ -521,9 +532,9 @@ def main():
         pidfile = config['pidfile']
         logfile = config['logfile']
         daemonize(
-                pidfile,
-                stdout=logfile,
-                stderr=logfile
+            pidfile,
+            stdout=logfile,
+            stderr=logfile
         )
     serve(config)
 

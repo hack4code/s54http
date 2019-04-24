@@ -13,12 +13,12 @@ from OpenSSL import SSL
 
 
 __all__ = [
-        'Cache',
-        'SSLCtxFactory',
-        'NullProxy',
-        'daemonize',
-        'init_logger',
-        'parse_args',
+    'Cache',
+    'SSLCtxFactory',
+    'NullProxy',
+    'daemonize',
+    'init_logger',
+    'parse_args',
 ]
 
 
@@ -29,9 +29,9 @@ class NullProxy:
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
             cls._instance = super().__new__(
-                    cls,
-                    *args,
-                    **kwargs
+                cls,
+                *args,
+                **kwargs
             )
         return cls._instance
 
@@ -78,10 +78,10 @@ class SSLCtxFactory:
             ctx.load_tmp_dh(self._dhparam)
         ctx.set_cipher_list('ECDHE-RSA-AES128-GCM-SHA256')
         ctx.set_verify(
-                SSL.VERIFY_PEER |
-                SSL.VERIFY_FAIL_IF_NO_PEER_CERT |
-                SSL.VERIFY_CLIENT_ONCE,
-                self._callback
+            SSL.VERIFY_PEER |
+            SSL.VERIFY_FAIL_IF_NO_PEER_CERT |
+            SSL.VERIFY_CLIENT_ONCE,
+            self._callback
         )
         self._ctx = ctx
 
@@ -162,90 +162,90 @@ def init_logger(config, logger):
 
 def parse_args(config):
     PATH_ARGUMENT = [
-            'ca',
-            'key',
-            'cert',
-            'dhparam',
-            'pidfile',
-            'logfile'
+        'ca',
+        'key',
+        'cert',
+        'dhparam',
+        'pidfile',
+        'logfile'
     ]
     FILE_ARGUMENT = [
-            'ca',
-            'arg',
-            'cert'
+        'ca',
+        'arg',
+        'cert'
     ]
     usage = f"{sys.argv[0].split('/')[-1]}"
     parser = argparse.ArgumentParser(usage)
     parser.add_argument(
-            "-d",
-            "--daemon",
-            dest="daemon",
-            action="store_true",
-            help="run as daemon"
+        "-d",
+        "--daemon",
+        dest="daemon",
+        action="store_true",
+        help="run as daemon"
     )
     parser.add_argument(
-            "-l",
-            "--host",
-            dest="host",
-            help="listen address"
+        "-l",
+        "--host",
+        dest="host",
+        help="listen address"
     )
     parser.add_argument(
-            "-p",
-            "--port",
-            dest="port",
-            type=int,
-            help="listen port"
+        "-p",
+        "--port",
+        dest="port",
+        type=int,
+        help="listen port"
     )
     parser.add_argument(
-            "--key",
-            dest="key",
-            help="key file path"
+        "--key",
+        dest="key",
+        help="key file path"
     )
     parser.add_argument(
-            "--ca",
-            dest="ca",
-            help="ca file path"
+        "--ca",
+        dest="ca",
+        help="ca file path"
     )
     parser.add_argument(
-            "--cert",
-            dest="cert",
-            help="cert file path"
+        "--cert",
+        dest="cert",
+        help="cert file path"
     )
     parser.add_argument(
-            "--dhparam",
-            dest="dhparam",
-            help="dhparam file path"
+        "--dhparam",
+        dest="dhparam",
+        help="dhparam file path"
     )
     parser.add_argument(
-            "-S",
-            dest="saddr",
-            help="server address"
+        "-S",
+        dest="saddr",
+        help="server address"
     )
     parser.add_argument(
-            "-P",
-            dest="sport",
-            type=int,
-            help="server port"
+        "-P",
+        dest="sport",
+        type=int,
+        help="server port"
     )
     parser.add_argument(
-            "--pidfile",
-            dest="pidfile",
-            help="pid file"
+        "--pidfile",
+        dest="pidfile",
+        help="pid file"
     )
     parser.add_argument(
-            "--logfile",
-            dest="logfile",
-            help="log file"
+        "--logfile",
+        dest="logfile",
+        help="log file"
     )
     parser.add_argument(
-            "--loglevel",
-            dest="loglevel",
-            help="DEBUG, INFO, WARN, ERROR"
+        "--loglevel",
+        dest="loglevel",
+        help="DEBUG, INFO, WARN, ERROR"
     )
     parser.add_argument(
-            "--dns",
-            dest="dns",
-            help="dns server[addr:port|addr]"
+        "--dns",
+        dest="dns",
+        help="dns server[addr:port|addr]"
     )
     args = parser.parse_args()
     for arg in config.keys():
