@@ -46,7 +46,9 @@ class SSLCtxFactory:
 
     method = SSL.TLSv1_2_METHOD
 
-    def __init__(self, client, ca, key, cert, *, dhparam=None, callback=None):
+    def __init__(self, client, ca, key, cert, *,
+                 dhparam=None,
+                 callback=None):
         self.isClient = client
         self._ca = ca
         self._key = key

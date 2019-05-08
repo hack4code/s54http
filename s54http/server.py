@@ -469,9 +469,9 @@ class TunnelProtocol(TwistedProtocol.Protocol):
         self.transport.registerProducer(producer, True)
         proxy = self.transport.getPeer()
         logger.info(
-                'proxy[%s:%u] connected',
-                proxy.host,
-                proxy.port
+            'proxy[%s:%u] connected',
+            proxy.host,
+            proxy.port
         )
 
     def connectionMade(self):
