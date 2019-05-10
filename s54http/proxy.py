@@ -58,14 +58,15 @@ class TunnelProtocol(TwistedProtocol.Protocol):
 
     def dataReceived(self, data):
         self.buffer += data
-        if len(self.buffer) < 4:
-            return
-        length, = struct.unpack('!I', self.buffer[:4])
-        if len(self.buffer) < length:
-            return
-        message = memoryview(self.buffer)[:length]
-        self.dispatcher.dispatchMessage(message)
-        self.buffer = self.buffer[length:]
+        while True:
+            if len(self.buffer) < 4:
+                return
+            length, = struct.unpack('!I', self.buffer[:4])
+            if len(self.buffer) < length:
+                return
+            message = memoryview(self.buffer)[:length]
+            self.dispatcher.dispatchMessage(message)
+            self.buffer = self.buffer[length:]
 
     def connectionLost(self, reason):
         self.dispatcher.tunnelClosed()
