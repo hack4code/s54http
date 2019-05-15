@@ -116,7 +116,7 @@ def daemonize(pidfile, *,
               stdout='/dev/null',
               stderr='/dev/null'):
     if os.path.exists(pidfile):
-        logging.getLogger(__name__).info('already running')
+        print('already running', file=sys.stdout)
         raise SystemExit(1)
 
     try:
