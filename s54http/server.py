@@ -340,7 +340,7 @@ class SocksDispatcher:
         except KeyError:
             logger.error('sock_id[%u] receive data after closed', sock_id)
         else:
-            sock.sendRemote(data)
+            sock.sendRemote(bytes(data))
 
     def handleRemote(self, sock_id, data):
         """

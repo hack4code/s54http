@@ -273,7 +273,7 @@ class SocksDispatcher:
                 sock.remote_host,
                 sock.remote_port
             )
-            sock.transport.write(data)
+            sock.transport.write(bytes(data))
 
     def closeRemote(self, sock):
         """
