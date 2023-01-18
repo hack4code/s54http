@@ -1,5 +1,1 @@
-cryptography
-pycrypto
-pyOpenSSL
-service-identity
 Twisted
